@@ -33,6 +33,10 @@ bool platformGetWindowSize(int32_t* outW, int32_t* outH) {
     return true;
 }
 
+bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
+    return platformGetWindowSize(outW, outH);
+}
+
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     glfwSetWindowSize(width, height);

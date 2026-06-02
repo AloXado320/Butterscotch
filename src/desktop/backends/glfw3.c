@@ -43,6 +43,17 @@ bool platformGetWindowSize(int32_t* outW, int32_t* outH) {
     return true;
 }
 
+bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
+    if (!outW || !outH || !window) return false;
+    int w = 0;
+    int h = 0;
+    glfwGetWindowSize(window, &w, &h);
+    if (w <= 0 || h <= 0) return false;
+    *outW = w;
+    *outH = h;
+    return true;
+}
+
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (!window) return;
@@ -129,6 +140,80 @@ static void resizeCallback(GLFWwindow* window, int width, int height) {
 
 #endif
 
+static int32_t glfwMouseButtonToGml(int glfwButton) {
+    switch (glfwButton) {
+        case GLFW_MOUSE_BUTTON_LEFT: return GML_MB_LEFT;
+        case GLFW_MOUSE_BUTTON_RIGHT: return GML_MB_RIGHT;
+        case GLFW_MOUSE_BUTTON_MIDDLE: return GML_MB_MIDDLE;
+        default: return INT32_MIN; // Unknown
+    }
+}
+
+static void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
+    int winWidth, winHeight;
+    glfwGetWindowSize(window, &winWidth, &winHeight);
+
+    if (winWidth <= 0 || winHeight <= 0 || g_runner->currentRoom == nullptr) return;
+
+    // Map window pixel -> FBO pixel. The FBO is blit-stretched to fill the window game area (accounting for letterboxing).
+    int32_t gameW = g_runner->renderGameW > 0 ? g_runner->renderGameW : g_runner->currentRoom->width;
+    int32_t gameH = g_runner->renderGameH > 0 ? g_runner->renderGameH : g_runner->currentRoom->height;
+
+    double fboX = ((xpos - g_runner->viewportX) / g_runner->viewportW) * gameW;
+    double fboY = ((ypos - g_runner->viewportY) / g_runner->viewportH) * gameH;
+
+    g_runner->mouse->normalizedX = (xpos - g_runner->viewportX) / g_runner->viewportW;
+    g_runner->mouse->normalizedY = (ypos - g_runner->viewportY) / g_runner->viewportH;
+    // Find the view whose port rect contains the cursor; fall back to the first enabled view, then to a default (0,0,roomW,roomH) mapping when no views are enabled.
+    // Native runner rule (GR_Window_Views_Convert): count enabled views that render directly to screen (view_surface_id == -1).
+    // If any exist, map via the one whose port contains the cursor (or fall through to the last one tried).
+    // If ALL enabled views have a surface bound, use room-space mapping scaled by the window, since the game is manually compositing those surfaces onto the window.
+    bool viewsEnabled = (g_runner->currentRoom->flags & 1) != 0;
+    int32_t screenViewCount = 0;
+    RoomView* pickedView = nullptr;
+    RoomView* lastScreenView = nullptr;
+    if (viewsEnabled) {
+        repeat(8, vi) {
+            RoomView* v = &g_runner->currentRoom->views[vi];
+            if (!v->enabled || g_runner->viewSurfaceIds[vi] != -1) continue;
+            screenViewCount++;
+            lastScreenView = v;
+            if (fboX >= v->portX && fboX < v->portX + v->portWidth && fboY >= v->portY && fboY < v->portY + v->portHeight) {
+                pickedView = v;
+                break;
+            }
+        }
+        if (pickedView == nullptr) pickedView = lastScreenView;
+    }
+
+    if (pickedView != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0) {
+        g_runner->mouse->mouseX = pickedView->viewX + (fboX - pickedView->portX) * ((double) pickedView->viewWidth / pickedView->portWidth);
+        g_runner->mouse->mouseY = pickedView->viewY + (fboY - pickedView->portY) * ((double) pickedView->viewHeight / pickedView->portHeight);
+    } else if (viewsEnabled && screenViewCount == 0) {
+        // No enabled view renders to screen (all redirect to surfaces). Mouse is in room space.
+        int32_t roomW = g_runner->currentRoom->width;
+        int32_t roomH = g_runner->currentRoom->height;
+        g_runner->mouse->mouseX = (xpos / winWidth) * roomW;
+        g_runner->mouse->mouseY = (ypos / winHeight) * roomH;
+    } else {
+        g_runner->mouse->mouseX = fboX;
+        g_runner->mouse->mouseY = fboY;
+    }
+}
+
+static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    (void)mods;
+    int32_t gmlButton = glfwMouseButtonToGml(button);
+    if (0 > gmlButton) return;
+    if (action == GLFW_PRESS) RunnerMouse_onButtonDown(g_runner->mouse, gmlButton);
+    else if (action == GLFW_RELEASE) RunnerMouse_onButtonUp(g_runner->mouse, gmlButton);
+}
+
+static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void)xoffset;
+    RunnerMouse_onWheel(g_runner->mouse, yoffset);
+}
+
 bool platformInit(int reqW, int reqH, const char *title, bool headless) {
     // Init GLFW
     glfwSetErrorCallback(glfwErrorCallback);
@@ -201,6 +286,11 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
     // Set up keyboard input
     glfwSetKeyCallback(window, keyCallback);
     glfwSetCharCallback(window, characterCallback);
+    // Set up mouse input
+    glfwSetCursorPosCallback(window, cursorPositionCallback);
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    glfwSetScrollCallback(window, scrollCallback);
+
     return true;
 }
 

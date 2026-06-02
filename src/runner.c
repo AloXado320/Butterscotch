@@ -262,6 +262,33 @@ const char* Runner_getEventName(int32_t eventType, int32_t eventSubtype) {
                 default:             return "Draw";
             }
         case EVENT_KEYBOARD:   return "Keyboard";
+        case EVENT_MOUSE:
+            switch (eventSubtype) {
+                case MOUSE_LEFT_BUTTON:          return "MouseLeftButton";
+                case MOUSE_RIGHT_BUTTON:         return "MouseRightButton";
+                case MOUSE_MIDDLE_BUTTON:        return "MouseMiddleButton";
+                case MOUSE_NO_BUTTON:            return "MouseNoButton";
+                case MOUSE_LEFT_PRESSED:         return "MouseLeftPressed";
+                case MOUSE_RIGHT_PRESSED:        return "MouseRightPressed";
+                case MOUSE_MIDDLE_PRESSED:       return "MouseMiddlePressed";
+                case MOUSE_LEFT_RELEASED:        return "MouseLeftReleased";
+                case MOUSE_RIGHT_RELEASED:       return "MouseRightReleased";
+                case MOUSE_MIDDLE_RELEASED:      return "MouseMiddleReleased";
+                case MOUSE_ENTER:                return "MouseEnter";
+                case MOUSE_LEAVE:                return "MouseLeave";
+                case MOUSE_GLOB_LEFT_BUTTON:     return "GlobalLeftButton";
+                case MOUSE_GLOB_RIGHT_BUTTON:    return "GlobalRightButton";
+                case MOUSE_GLOB_MIDDLE_BUTTON:   return "GlobalMiddleButton";
+                case MOUSE_GLOB_LEFT_PRESSED:    return "GlobalLeftPressed";
+                case MOUSE_GLOB_RIGHT_PRESSED:   return "GlobalRightPressed";
+                case MOUSE_GLOB_MIDDLE_PRESSED:  return "GlobalMiddlePressed";
+                case MOUSE_GLOB_LEFT_RELEASED:   return "GlobalLeftReleased";
+                case MOUSE_GLOB_RIGHT_RELEASED:  return "GlobalRightReleased";
+                case MOUSE_GLOB_MIDDLE_RELEASED: return "GlobalMiddleReleased";
+                case MOUSE_WHEEL_UP:             return "MouseWheelUp";
+                case MOUSE_WHEEL_DOWN:           return "MouseWheelDown";
+                default:                         return "Mouse";
+            }
         case EVENT_OTHER:
             switch (eventSubtype) {
                 case OTHER_OUTSIDE_ROOM:    return "OutsideRoom";
@@ -1738,6 +1765,10 @@ Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileS
     runner->osType = OS_WINDOWS;
     runner->keyboard = RunnerKeyboard_create();
     runner->gamepads = RunnerGamepad_create();
+    runner->mouse = RunnerMouse_create();
+    repeat(8, i) {
+        runner->viewSurfaceIds[i] = -1;
+    }
     runner->appSurfaceEnabled = true;
     runner->appSurfaceAutoDraw = true;
     runner->usingAppSurface = true;
@@ -1747,6 +1778,8 @@ Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileS
     runner->oldApplicationHeight = runner->applicationHeight;
     runner->applicationSurfaceId = APPLICATION_SURFACE_ID;
     renderer->runner = runner;
+    runner->viewportW = 1;
+    runner->viewportH = 1;
 
     repeat(MAX_SURFACES, i) {
         runner->surfaceStack[i] = -1;
@@ -2232,6 +2265,174 @@ static bool adaptPath(Runner* runner, Instance* inst) {
     SpatialGrid_markInstanceAsDirty(runner->spatialGrid, inst);
 
     return atPathEnd;
+}
+
+// Fires one local mouse subtype event on every instance in a snapshot that currently has the mouse over it.
+// mouseIsOver must already have been computed for each instance.
+static void fireLocalMouseSubtype(Runner* runner, int32_t subtype, int32_t slot, Instance** snapshot, int32_t count, bool* isOverArr) {
+    if (slot < 0) return;
+    ResolvedEventTable* table = &runner->eventTable;
+    repeat(count, i) {
+        Instance* inst = snapshot[i];
+        if (!inst->active) continue;
+        if (!isOverArr[i]) continue;
+        int32_t ownerObjectIndex = -1;
+        int32_t codeId = ResolvedEventTable_lookup(table, inst->objectIndex, slot, &ownerObjectIndex);
+        if (0 > codeId) continue;
+        Runner_executeResolvedEvent(runner, inst, EVENT_MOUSE, subtype, codeId, ownerObjectIndex);
+        if (runner->pendingRoom >= 0) return;
+    }
+}
+
+static void dispatchMouseEvents(Runner* runner) {
+    RunnerMouseState* mouse = runner->mouse;
+    DataWin* dataWin = runner->dataWin;
+
+    GMLReal mx = mouse->mouseX;
+    GMLReal my = mouse->mouseY;
+
+    // ---[ Global events: fire for all objects regardless of mouse position ]---
+
+    // Global button held (50-52)
+    if (RunnerMouse_checkButton(mouse, GML_MB_LEFT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_LEFT_BUTTON);
+    if (RunnerMouse_checkButton(mouse, GML_MB_RIGHT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_RIGHT_BUTTON);
+    if (RunnerMouse_checkButton(mouse, GML_MB_MIDDLE))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_MIDDLE_BUTTON);
+
+    // Global button pressed (53-55)
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_LEFT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_LEFT_PRESSED);
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_RIGHT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_RIGHT_PRESSED);
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_MIDDLE))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_MIDDLE_PRESSED);
+
+    // Global button released (56-58)
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_LEFT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_LEFT_RELEASED);
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_RIGHT))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_RIGHT_RELEASED);
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_MIDDLE))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_GLOB_MIDDLE_RELEASED);
+
+    // Wheel events (60-61) - global
+    if (RunnerMouse_getWheelUp(mouse))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_WHEEL_UP);
+    if (RunnerMouse_getWheelDown(mouse))
+        Runner_executeEventForAll(runner, EVENT_MOUSE, MOUSE_WHEEL_DOWN);
+
+    if (runner->pendingRoom >= 0) return;
+
+    // ---[ Local events: fire only on instances whose mask the mouse is over ]---
+    // Pre-lookup slots for all local subtypes to bail early if none are registered.
+    int32_t slotLeftBtn      = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_LEFT_BUTTON);
+    int32_t slotRightBtn     = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_RIGHT_BUTTON);
+    int32_t slotMiddleBtn    = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_MIDDLE_BUTTON);
+    int32_t slotNoBtn        = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_NO_BUTTON);
+    int32_t slotLeftPress    = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_LEFT_PRESSED);
+    int32_t slotRightPress   = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_RIGHT_PRESSED);
+    int32_t slotMiddlePress  = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_MIDDLE_PRESSED);
+    int32_t slotLeftRel      = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_LEFT_RELEASED);
+    int32_t slotRightRel     = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_RIGHT_RELEASED);
+    int32_t slotMiddleRel    = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_MIDDLE_RELEASED);
+    int32_t slotEnter        = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_ENTER);
+    int32_t slotLeave        = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_MOUSE, MOUSE_LEAVE);
+
+    bool anyLocalSlot = slotLeftBtn >= 0 || slotRightBtn >= 0 || slotMiddleBtn >= 0 ||
+                        slotNoBtn >= 0 || slotLeftPress >= 0 || slotRightPress >= 0 ||
+                        slotMiddlePress >= 0 || slotLeftRel >= 0 || slotRightRel >= 0 ||
+                        slotMiddleRel >= 0 || slotEnter >= 0 || slotLeave >= 0;
+    if (!anyLocalSlot) return;
+
+    // Snapshot all instances (local mouse events can run user code that changes the instance list)
+    int32_t instCount = (int32_t) arrlen(runner->instances);
+    if (instCount == 0) return;
+
+    int32_t snapshotBase = (int32_t) arrlen(runner->instanceSnapshots);
+    arrsetlen(runner->instanceSnapshots, snapshotBase + instCount);
+    memcpy(&runner->instanceSnapshots[snapshotBase], runner->instances, (size_t) instCount * sizeof(Instance*));
+
+    // Per-instance mouse-over flags (stack-allocated for typical room sizes, heap for large rooms)
+    bool* isOver = (bool*) alloca((size_t) instCount * sizeof(bool));
+
+    // Compute whether the mouse is currently over each instance's mask.
+    // Enter / Leave edge detection also updates inst->mouseOver here.
+    ResolvedEventTable* table = &runner->eventTable;
+    repeat(instCount, i) {
+        Instance* inst = runner->instanceSnapshots[snapshotBase + i];
+        if (!inst->active) { isOver[i] = false; continue; }
+
+        Sprite* spr = Collision_getSprite(dataWin, inst);
+        bool over = Collision_pointInInstance(spr, inst, mx, my);
+        isOver[i] = over;
+
+        // Enter / Leave (one-shot transitions)
+        bool wasOver = inst->mouseOver;
+        inst->mouseOver = over;
+
+        if (over && !wasOver && slotEnter >= 0) {
+            int32_t ownerObjectIndex = -1;
+            int32_t codeId = ResolvedEventTable_lookup(table, inst->objectIndex, slotEnter, &ownerObjectIndex);
+            if (codeId >= 0) {
+                Runner_executeResolvedEvent(runner, inst, EVENT_MOUSE, MOUSE_ENTER, codeId, ownerObjectIndex);
+                if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+            }
+        } else if (!over && wasOver && slotLeave >= 0) {
+            int32_t ownerObjectIndex = -1;
+            int32_t codeId = ResolvedEventTable_lookup(table, inst->objectIndex, slotLeave, &ownerObjectIndex);
+            if (codeId >= 0) {
+                Runner_executeResolvedEvent(runner, inst, EVENT_MOUSE, MOUSE_LEAVE, codeId, ownerObjectIndex);
+                if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+            }
+        }
+    }
+
+    // Button-held local events (0-2)
+    if (RunnerMouse_checkButton(mouse, GML_MB_LEFT))
+        fireLocalMouseSubtype(runner, MOUSE_LEFT_BUTTON, slotLeftBtn, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButton(mouse, GML_MB_RIGHT))
+        fireLocalMouseSubtype(runner, MOUSE_RIGHT_BUTTON, slotRightBtn, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButton(mouse, GML_MB_MIDDLE))
+        fireLocalMouseSubtype(runner, MOUSE_MIDDLE_BUTTON, slotMiddleBtn, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    // No-button local event (3): mouse over but nothing held
+    if (!RunnerMouse_checkButton(mouse, GML_MB_ANY))
+        fireLocalMouseSubtype(runner, MOUSE_NO_BUTTON, slotNoBtn, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    // Button-pressed local events (4-6)
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_LEFT))
+        fireLocalMouseSubtype(runner, MOUSE_LEFT_PRESSED, slotLeftPress, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_RIGHT))
+        fireLocalMouseSubtype(runner, MOUSE_RIGHT_PRESSED, slotRightPress, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButtonPressed(mouse, GML_MB_MIDDLE))
+        fireLocalMouseSubtype(runner, MOUSE_MIDDLE_PRESSED, slotMiddlePress, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    // Button-released local events (7-9)
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_LEFT))
+        fireLocalMouseSubtype(runner, MOUSE_LEFT_RELEASED, slotLeftRel, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_RIGHT))
+        fireLocalMouseSubtype(runner, MOUSE_RIGHT_RELEASED, slotRightRel, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+    if (runner->pendingRoom >= 0) { arrsetlen(runner->instanceSnapshots, snapshotBase); return; }
+
+    if (RunnerMouse_checkButtonReleased(mouse, GML_MB_MIDDLE))
+        fireLocalMouseSubtype(runner, MOUSE_MIDDLE_RELEASED, slotMiddleRel, &runner->instanceSnapshots[snapshotBase], instCount, isOver);
+
+    arrsetlen(runner->instanceSnapshots, snapshotBase);
 }
 
 static void dispatchCollisionEvents(Runner* runner) {
@@ -2896,6 +3097,9 @@ void Runner_step(Runner* runner) {
     // Tick timelines
     tickTimelines(runner);
 
+    dispatchMouseEvents(runner);
+    if (runner->pendingRoom >= 0) { Runner_handlePendingRoomChange(runner); return; }
+
     // Execute Normal Step for all instances
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_NORMAL);
 
@@ -3515,6 +3719,7 @@ void Runner_free(Runner* runner) {
 
     RunnerKeyboard_free(runner->keyboard);
     RunnerGamepad_free(runner->gamepads);
+    RunnerMouse_free(runner->mouse);
     Instance_free(runner->globalScopeInstance);
     free(runner);
 }
