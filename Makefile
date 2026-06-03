@@ -155,7 +155,7 @@ endif
 endif
 
 ifeq ($(OS),Windows)
-LIBS += -static
+LIBS += -static -lwinmm
 else
 ifeq ($(OS),Darwin)
 LIBS += -lobjc
