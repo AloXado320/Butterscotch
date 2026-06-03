@@ -353,8 +353,7 @@ static void glBeginGUI(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t p
     glEnable(GL_SCISSOR_TEST);
 
     Matrix4f projection;
-    Matrix4f_identity(&projection);
-    Matrix4f_ortho(&projection, 0.0f, (float) guiW, (float) guiH, 0.0f, -1.0f, 1.0f);
+    Matrix4f_guiProjection(&projection, (float) guiW, (float) guiH, (float) portW, (float) portH);
 
     glUseProgram(gl->shaderProgram);
     glUniformMatrix4fv(gl->uProjection, 1, GL_FALSE, projection.m);
@@ -821,7 +820,6 @@ static void glDrawTriangle(Renderer *renderer, float x1, float y1, float x2, flo
 
         flushBatch(gl);
 
-        int i = 0;
         float verts[24] = {
             x1, y1, 0.0f, 0.0f, r, g, b, renderer->drawAlpha,
             x2, y2, 0.0f, 0.0f, r, g, b, renderer->drawAlpha,

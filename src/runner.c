@@ -980,12 +980,35 @@ void Runner_computeViewDisplayScale(Runner* runner, int32_t gameW, int32_t gameH
     }
 }
 
+// Widescreen hack: widen one view axis from baseSize to surfaceSize while keeping the same pixels-per-world scale, growing the visible area symmetrically about the view center.
+static void expandViewAxis(int32_t pos, int32_t size, int32_t surfaceSize, int32_t baseSize, int32_t* outPos, int32_t* outSize) {
+    if (surfaceSize <= baseSize || baseSize <= 0) {
+        *outPos = pos;
+        *outSize = size;
+        return;
+    }
+    int32_t center = pos + size / 2;
+    *outSize = (int32_t) ((int64_t) size * surfaceSize / baseSize);
+    *outPos = center - *outSize / 2;
+}
+
+// Clamp the widened view back inside the room so the extra field-of-view only ever reveals more of the room.
+static int32_t clampExpandedView(int32_t pos, int32_t size, int32_t roomSize) {
+    if (size >= roomSize) return (roomSize - size) / 2; // room can't contain the widened view: center it (split the spill evenly)
+    if (0 > pos) return 0;
+    if (pos + size > roomSize) return roomSize - size;
+    return pos;
+}
+
 void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displayScaleX, float displayScaleY, bool debugShowCollisionMasks) {
     Renderer* renderer = runner->renderer;
     Room* activeRoom = runner->currentRoom;
     bool anyViewRendered = false;
 
     bool viewsEnabled = (activeRoom->flags & 1) != 0;
+
+    int32_t widescreenBaseW = gameW - runner->widescreenExtraWidth;
+    int32_t widescreenBaseH = gameH - runner->widescreenExtraHeight;
 
     if (viewsEnabled) {
         repeat(MAX_VIEWS, vi) {
@@ -995,10 +1018,12 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displa
             GMLCamera* camera = Runner_getCameraForView(runner, (int32_t) vi);
             if (camera == nullptr) continue;
 
-            int32_t viewX = camera->viewX;
-            int32_t viewY = camera->viewY;
-            int32_t viewW = camera->viewWidth;
-            int32_t viewH = camera->viewHeight;
+            int32_t viewX, viewY, viewW, viewH;
+            expandViewAxis(camera->viewX, camera->viewWidth, gameW, widescreenBaseW, &viewX, &viewW);
+            expandViewAxis(camera->viewY, camera->viewHeight, gameH, widescreenBaseH, &viewY, &viewH);
+            // Keep the widened view inside the room (only matters when the axis was actually grown by the widescreen hack).
+            if (runner->widescreenExtraWidth > 0) viewX = clampExpandedView(viewX, viewW, (int32_t) activeRoom->width);
+            if (runner->widescreenExtraHeight > 0) viewY = clampExpandedView(viewY, viewH, (int32_t) activeRoom->height);
             int32_t portX = (int32_t) ((float) view->portX * displayScaleX + 0.5f);
             int32_t portY = (int32_t) ((float) view->portY * displayScaleY + 0.5f);
             int32_t portW = (int32_t) ((float) view->portWidth * displayScaleX + 0.5f);
@@ -1019,9 +1044,12 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displa
     }
 
     if (!anyViewRendered) {
-        // No views enabled: render with default full-screen view
+        // No views enabled: render with default full-screen view.
+        // gameW/gameH already include the widescreen extra, shift the world origin by half of it on each grown axis so the original room stays centered and the revealed area is split evenly between the opposing edges.
         runner->viewCurrent = 0;
-        renderer->vtable->beginView(renderer, 0, 0, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
+        int32_t fullViewX = -(runner->widescreenExtraWidth / 2);
+        int32_t fullViewY = -(runner->widescreenExtraHeight / 2);
+        renderer->vtable->beginView(renderer, fullViewX, fullViewY, gameW, gameH, 0, 0, gameW, gameH, 0.0f);
         Runner_draw(runner);
 
         if (debugShowCollisionMasks) DebugOverlay_drawCollisionMasks(runner);
@@ -1806,6 +1834,8 @@ Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileS
     runner->applicationHeight = (int32_t) dataWin->gen8.defaultWindowHeight;
     runner->oldApplicationWidth = runner->applicationWidth;
     runner->oldApplicationHeight = runner->applicationHeight;
+    runner->widescreenExtraWidth = 0;
+    runner->widescreenExtraHeight = 0;
     runner->applicationSurfaceId = APPLICATION_SURFACE_ID;
     renderer->runner = runner;
     runner->viewportW = 1;
@@ -2611,7 +2641,7 @@ static void dispatchCollisionEvents(Runner* runner) {
                     if (needsPrecise) {
                         bool preciseHit = Collision_instancesOverlapPrecise(runner, self, other, bboxSelf, bboxOther);
 #ifdef ENABLE_VM_TRACING
-                        if (traceThisPair) fprintf(stderr, "  precise=%s (selfSepMasks=%d otherSepMasks=%d)\n", preciseHit ? "hit" : "miss", sprSelf ? sprSelf->sepMasks : -1, sprOther ? sprOther->sepMasks : -1);
+                        if (traceThisPair) fprintf(stderr, "  precise=%s (selfSepMasks=%d otherSepMasks=%d)\n", preciseHit ? "hit" : "miss", sprSelf ? (int32_t)sprSelf->sepMasks : -1, sprOther ? (int32_t)sprOther->sepMasks : -1);
 #endif
                         if (!preciseHit) continue;
                     }
@@ -2775,7 +2805,6 @@ static void updateViews(Runner* runner) {
 }
 
 static void dispatchOutsideRoomEvents(Runner* runner) {
-    DataWin* dataWin = runner->dataWin;
     int32_t outsideSlot = EventSlotMap_lookup(&runner->eventSlotMap, EVENT_OTHER, OTHER_OUTSIDE_ROOM);
     if (0 > outsideSlot) return;
     ResolvedEventTable* table = &runner->eventTable;
@@ -3555,7 +3584,7 @@ static void writeRValueJson(JsonWriter* w, RValue val) {
             if (val.array != nullptr) {
                 repeat(GMLArray_length1D(val.array), ai) {
                     RValue* cell = GMLArray_slot(val.array, ai);
-                    writeRValueJson(w, cell != nullptr ? *cell : (RValue){ .type = RVALUE_UNDEFINED });
+                    writeRValueJson(w, cell != nullptr ? *cell : RValue_makeUndefined());
                 }
             }
             JsonWriter_endArray(w);

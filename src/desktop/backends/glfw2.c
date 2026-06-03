@@ -121,7 +121,7 @@ static void GLFWCALL resizeCallback(int width, int height) {
 
 #endif
 
-bool platformInit(int reqW, int reqH, const char *title, bool headless) {
+bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) {
     if (headless) {
         fprintf(stderr, "Headless mode is not supported with GLFW 2\n");
         return false;
@@ -155,6 +155,8 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         glfwTerminate();
         return false;
     }
+
+    glfwSetWindowTitle(title);
 
     glfwSwapInterval(0); // Disable v-sync, we control timing ourselves
 
@@ -209,7 +211,8 @@ void *platformGetProcAddress(const char *name) {
     // This just implements it in a way that's fixed
     // so it can be passed to GLAD.
     void *ret = (void *)wglGetProcAddress(name);
-    if (ret == 0 || ret == (void *)1 || ret == (void *)2 || ret == (void *)3 || ret == (void *)-1) { // ChatGPT says this is needed because some OpenGL drivers do this
+    // Fallback for driver-specific error codes and legacy OpenGL core functions.
+    if (ret == 0 || ret == (void *)1 || ret == (void *)2 || ret == (void *)3 || ret == (void *)-1) {
         HMODULE handle = GetModuleHandle("opengl32.dll");
         if (handle)
             ret = (void *)GetProcAddress(handle, name);
@@ -233,17 +236,9 @@ bool platformHandleEvents(void) {
 
 void platformSleepUntil(double time) {
     double remaining = time - platformGetTime();
-    if (remaining > 0.002) {
-#ifdef _WIN32
-        Sleep((DWORD) ((remaining - 0.001) * 1000));
-#else
-        struct timespec ts = {
-            .tv_sec = 0,
-            .tv_nsec = (long) ((remaining - 0.001) * 1e9)
-        };
-        nanosleep(&ts, NULL);
-#endif
-    }
+    if (remaining > 0.002) // glfwSleep takes seconds as a double
+        glfwSleep(remaining - 0.001);
+
     while (platformGetTime() < time) {
         // Spin-wait for the remaining sub-millisecond
     }

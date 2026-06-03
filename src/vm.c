@@ -247,11 +247,11 @@ static Instance* findInstanceByTarget(VMContext* ctx, int32_t target);
 // The returned RValue is a weak view, callers that stash it must strengthen (incRef, strdup).
 static RValue VM_arrayReadAt(RValue* slot, int32_t index) {
     if (slot == nullptr || slot->type != RVALUE_ARRAY || slot->array == nullptr) {
-        return (RValue){ .type = RVALUE_UNDEFINED };
+        return RValue_makeUndefined();
     }
     RValue* cell = GMLArray_slot(slot->array, index);
     if (cell == nullptr) {
-        return (RValue){ .type = RVALUE_UNDEFINED };
+        return RValue_makeUndefined();
     }
     RValue result = *cell;
     result.ownsReference = false;
@@ -424,16 +424,6 @@ static ArrayAccess popArrayAccess(VMContext* ctx, uint32_t varRef) {
 }
 
 // ===[ Variable Resolution ]===
-static const char* instanceTypeName(int32_t instanceType) {
-    switch (instanceType) {
-        case INSTANCE_SELF: return "self";
-        case INSTANCE_OTHER: return "other";
-        case INSTANCE_GLOBAL: return "global";
-        case INSTANCE_LOCAL: return "local";
-        case INSTANCE_ARG: return "arg";
-        default: return "instance";
-    }
-}
 
 // Returns the object name for an instance, or "<global_scope>" for the global scope dummy instance
 static const char* instanceObjectName(VMContext* ctx, Instance* inst) {
@@ -458,7 +448,7 @@ static uint32_t growGlobalSlotSparse(VMContext* ctx, int32_t varKey) {
             ctx->globalVarCapacity = newCap;
         }
         for (uint32_t i = ctx->globalVarCount; slot >= i; i++) {
-            ctx->globalVars[i] = (RValue){ .type = RVALUE_UNDEFINED };
+            ctx->globalVars[i] = RValue_makeUndefined();
         }
         ctx->globalVarCount = slot + 1;
     }
@@ -496,7 +486,7 @@ static uint32_t resolveLocalSlot(VMContext* ctx, int32_t varID) {
     // Pre-existing entries can still be past ctx->localVarCount if a nested call to the same code extended the slot map while the outer frame was suspended (the outer frame's localVarCount is captured at call entry and doesn't follow later growth).
     if (slot >= ctx->localVarCount) {
         for (uint32_t i = ctx->localVarCount; slot >= i; i++) {
-            ctx->localVars[i] = (RValue){ .type = RVALUE_UNDEFINED };
+            ctx->localVars[i] = RValue_makeUndefined();
         }
         ctx->localVarCount = slot + 1;
     }
@@ -534,7 +524,7 @@ static inline bool tryFastVarRead(VMContext* ctx, int32_t instanceType, Variable
             Instance* inst = (Instance*) ctx->currentInstance;
             if (inst == nullptr) return false;
             RValue* slot = IntRValueHashMap_findSlot(&inst->selfVars, varDef->varID);
-            *out = (slot != nullptr) ? *slot : (RValue){ .type = RVALUE_UNDEFINED };
+            *out = (slot != nullptr) ? *slot : RValue_makeUndefined();
             out->ownsReference = false;
             return true;
         }
@@ -556,7 +546,7 @@ static inline bool tryFastVarRead(VMContext* ctx, int32_t instanceType, Variable
             Instance* inst = (Instance*) ctx->otherInstance;
             if (inst == nullptr) return false;
             RValue* slot = IntRValueHashMap_findSlot(&inst->selfVars, varDef->varID);
-            *out = (slot != nullptr) ? *slot : (RValue){ .type = RVALUE_UNDEFINED };
+            *out = (slot != nullptr) ? *slot : RValue_makeUndefined();
             out->ownsReference = false;
             return true;
         }
@@ -833,7 +823,7 @@ static RValue resolveVariableRead(VMContext* ctx, int32_t instanceType, uint32_t
                     return staticVal;
                 }
 #endif
-                return (RValue){ .type = RVALUE_UNDEFINED };
+                return RValue_makeUndefined();
             }
             break;
         }
@@ -2253,6 +2243,19 @@ static void handleCallV(VMContext* ctx, uint32_t instr) {
 
 // ===[ With-Statement Helpers (PushEnv/PopEnv) ]===
 
+// Resolves a collision/instance "target" argument by mapping the special INSTANCE_SELF and INSTANCE_OTHER to the concrete instance ID they refer to.
+int32_t VM_resolveInstanceTarget(VMContext* ctx, int32_t target) {
+    if (target == INSTANCE_SELF) {
+        Instance* self = (Instance*) ctx->currentInstance;
+        return self != nullptr ? (int32_t) self->instanceId : INSTANCE_NOONE;
+    }
+    if (target == INSTANCE_OTHER) {
+        Instance* other = (Instance*) ctx->otherInstance;
+        return other != nullptr ? (int32_t) other->instanceId : INSTANCE_NOONE;
+    }
+    return target;
+}
+
 // Checks if objectIndex is or inherits from targetObjectIndex by walking the parent chain.
 bool VM_isObjectOrDescendant(DataWin* dataWin, int32_t objectIndex, int32_t targetObjectIndex) {
     int32_t currentObj = objectIndex;
@@ -3182,29 +3185,37 @@ static RValue executeLoop(VMContext* ctx) {
                         fastHit = true;
                         break;
                     case 0x45: // Variable -> Bool
-                        if (top->type == RVALUE_INT32) {
-                            top->int32 = top->int32 > 0 ? 1 : 0;
-                            top->type = RVALUE_BOOL;
-                            fastHit = true;
-                        } else if (top->type == RVALUE_BOOL) {
-                            // Already 0/1; nothing to do
-                            fastHit = true;
-                        } else if (top->type == RVALUE_REAL) {
-                            top->int32 = top->real > (GMLReal) 0.5 ? 1 : 0;
-                            top->type = RVALUE_BOOL;
-                            fastHit = true;
+                        switch (top->type) {
+                            case RVALUE_INT32:
+                                top->int32 = top->int32 > 0 ? 1 : 0;
+                                top->type = RVALUE_BOOL;
+                                fastHit = true;
+                                break;
+                            case RVALUE_BOOL:
+                                // Already 0/1; nothing to do
+                                fastHit = true;
+                                break;
+                            case RVALUE_REAL:
+                                top->int32 = top->real > (GMLReal) 0.5 ? 1 : 0;
+                                top->type = RVALUE_BOOL;
+                                fastHit = true;
+                                break;
                         }
                         break;
                     case 0x25: // Variable -> Int32
-                        if (top->type == RVALUE_INT32) {
-                            fastHit = true;
-                        } else if (top->type == RVALUE_BOOL) {
-                            top->type = RVALUE_INT32;
-                            fastHit = true;
-                        } else if (top->type == RVALUE_REAL) {
-                            top->int32 = (int32_t) top->real;
-                            top->type = RVALUE_INT32;
-                            fastHit = true;
+                        switch (top->type) {
+                            case RVALUE_INT32:
+                                fastHit = true;
+                                break;
+                            case RVALUE_BOOL:
+                                top->type = RVALUE_INT32;
+                                fastHit = true;
+                                break;
+                            case RVALUE_REAL:
+                                top->int32 = (int32_t) top->real;
+                                top->type = RVALUE_INT32;
+                                fastHit = true;
+                                break;
                         }
                         break;
                     case 0x02: // Int32 -> Double (Real)

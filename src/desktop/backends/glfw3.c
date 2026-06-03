@@ -177,7 +177,7 @@ static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
     RunnerMouse_onWheel(g_runner->mouse, yoffset);
 }
 
-bool platformInit(int reqW, int reqH, const char *title, bool headless) {
+bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) {
     // Init GLFW
     glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit()) {

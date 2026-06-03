@@ -165,6 +165,30 @@ static inline Matrix4f* Matrix4f_viewProjection(Matrix4f* dest, float left, floa
     return dest;
 }
 
+// ===[ GUI Projection ]===
+
+// Ortho for the GUI layer that preserves the guiW:guiH aspect inside a viewportW:viewportH viewport, centering
+// (pillarbox/letterbox) instead of stretching. Identity to a plain ortho(0,guiW,guiH,0) when the aspects match.
+static inline Matrix4f* Matrix4f_guiProjection(Matrix4f* dest, float guiW, float guiH, float viewportW, float viewportH) {
+    float left = 0.0f, right = guiW, top = 0.0f, bottom = guiH;
+    if (guiW > 0.0f && guiH > 0.0f && viewportW > 0.0f && viewportH > 0.0f) {
+        float viewAspect = viewportW / viewportH;
+        float guiAspect = guiW / guiH;
+        if (viewAspect > guiAspect) {
+            float margin = (guiH * viewAspect - guiW) * 0.5f;
+            left = -margin;
+            right = guiW + margin;
+        } else if (viewAspect < guiAspect) {
+            float margin = (guiW / viewAspect - guiH) * 0.5f;
+            top = -margin;
+            bottom = guiH + margin;
+        }
+    }
+    Matrix4f_identity(dest);
+    Matrix4f_ortho(dest, left, right, bottom, top, -1.0f, 1.0f);
+    return dest;
+}
+
 // ===[ Transform Point ]===
 
 // Transform a 2D point (x, y) through the matrix (w=1), writing results to outX, outY
