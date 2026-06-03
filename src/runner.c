@@ -2267,6 +2267,53 @@ static bool adaptPath(Runner* runner, Instance* inst) {
     return atPathEnd;
 }
 
+void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, double mx, double my) {
+    if (winW <= 0 || winH <= 0 || runner->currentRoom == nullptr) return;
+
+    // Map window pixel -> FBO pixel. The FBO is blit-stretched to fill the window game area (accounting for letterboxing).
+    int32_t gameW = runner->renderGameW > 0 ? runner->renderGameW : runner->currentRoom->width;
+    int32_t gameH = runner->renderGameH > 0 ? runner->renderGameH : runner->currentRoom->height;
+
+    double fboX = ((mx - runner->viewportX) / runner->viewportW) * gameW;
+    double fboY = ((my - runner->viewportY) / runner->viewportH) * gameH;
+
+    // Find the view whose port rect contains the cursor; fall back to the first enabled view, then to a default (0,0,roomW,roomH) mapping when no views are enabled.
+    // Native runner rule (GR_Window_Views_Convert): count enabled views that render directly to screen (view_surface_id == -1).
+    // If any exist, map via the one whose port contains the cursor (or fall through to the last one tried).
+    // If ALL enabled views have a surface bound, use room-space mapping scaled by the window, since the game is manually compositing those surfaces onto the window.
+    bool viewsEnabled = (runner->currentRoom->flags & 1) != 0;
+    int32_t screenViewCount = 0;
+    RuntimeView* pickedView = nullptr;
+    RuntimeView* lastScreenView = nullptr;
+    if (viewsEnabled) {
+        repeat(8, vi) {
+            RuntimeView* v = &runner->views[vi];
+            if (!v->enabled || runner->viewSurfaceIds[vi] != -1) continue;
+            screenViewCount++;
+            lastScreenView = v;
+            if (fboX >= v->portX && fboX < v->portX + v->portWidth && fboY >= v->portY && fboY < v->portY + v->portHeight) {
+                pickedView = v;
+                break;
+            }
+        }
+        if (pickedView == nullptr) pickedView = lastScreenView;
+    }
+
+    if (pickedView != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0) {
+        runner->mouse->mouseX = pickedView->viewX + (fboX - pickedView->portX) * ((double) pickedView->viewWidth / pickedView->portWidth);
+        runner->mouse->mouseY = pickedView->viewY + (fboY - pickedView->portY) * ((double) pickedView->viewHeight / pickedView->portHeight);
+    } else if (viewsEnabled && screenViewCount == 0) {
+        // No enabled view renders to screen (all redirect to surfaces). Mouse is in room space.
+        int32_t roomW = runner->currentRoom->width;
+        int32_t roomH = runner->currentRoom->height;
+        runner->mouse->mouseX = (mx / winW) * roomW;
+        runner->mouse->mouseY = (my / winH) * roomH;
+    } else {
+        runner->mouse->mouseX = fboX;
+        runner->mouse->mouseY = fboY;
+    }
+}
+
 // Fires one local mouse subtype event on every instance in a snapshot that currently has the mouse over it.
 // mouseIsOver must already have been computed for each instance.
 static void fireLocalMouseSubtype(Runner* runner, int32_t subtype, int32_t slot, Instance** snapshot, int32_t count, bool* isOverArr) {

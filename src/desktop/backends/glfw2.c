@@ -42,6 +42,15 @@ void platformSetWindowSize(int32_t width, int32_t height) {
     glfwSetWindowSize(width, height);
 }
 
+void platformGetMousePos(double *xPos, double *yPos) {
+    if (!xPos || !yPos) return;
+    int mx = 0, my = 0;
+    glfwGetMousePos(&mx, &my);
+
+    *xPos = (double)mx;
+    *yPos = (double)my;
+}
+
 static bool platformGetWindowFocus(void) {
     return glfwGetWindowParam(GLFW_ACTIVE);
 }

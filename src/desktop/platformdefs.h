@@ -12,6 +12,7 @@ void platformSwapBuffers(void);
 void *platformGetProcAddress(const char *name);
 double platformGetTime(void);
 bool platformHandleEvents(void);
+void platformGetMousePos(double *xPos, double *yPos);
 bool platformGetWindowSize(int32_t* outW, int32_t* outH);
 bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH);
 void platformSetWindowSize(int32_t width, int32_t height);

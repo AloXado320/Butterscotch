@@ -1382,6 +1382,10 @@ int main(int argc, char* argv[]) {
                 runner->viewportW = scaledW;
                 runner->viewportH = scaledH;
 
+                double mx, my;
+                platformGetMousePos(&mx, &my);
+                Runner_updateMousePosition(runner, winW, winH, mx, my);
+
                 Runner_beginFrame(runner, gameW, gameH, fbWidth, fbHeight);
 
                 // Clear FBO with room background color
