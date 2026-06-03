@@ -2313,25 +2313,29 @@ void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, doub
     // If ALL enabled views have a surface bound, use room-space mapping scaled by the window, since the game is manually compositing those surfaces onto the window.
     bool viewsEnabled = (runner->currentRoom->flags & 1) != 0;
     int32_t screenViewCount = 0;
-    RuntimeView* pickedView = nullptr;
-    RuntimeView* lastScreenView = nullptr;
+    int32_t pickedViewIndex = -1;
+    int32_t lastScreenViewIndex = -1;
     if (viewsEnabled) {
-        repeat(8, vi) {
+        repeat(MAX_VIEWS, vi) {
             RuntimeView* v = &runner->views[vi];
             if (!v->enabled || runner->viewSurfaceIds[vi] != -1) continue;
             screenViewCount++;
-            lastScreenView = v;
+            lastScreenViewIndex = (int32_t) vi;
             if (fboX >= v->portX && fboX < v->portX + v->portWidth && fboY >= v->portY && fboY < v->portY + v->portHeight) {
-                pickedView = v;
+                pickedViewIndex = (int32_t) vi;
                 break;
             }
         }
-        if (pickedView == nullptr) pickedView = lastScreenView;
+        if (pickedViewIndex < 0) pickedViewIndex = lastScreenViewIndex;
     }
 
-    if (pickedView != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0) {
-        runner->mouse->mouseX = pickedView->viewX + (fboX - pickedView->portX) * ((double) pickedView->viewWidth / pickedView->portWidth);
-        runner->mouse->mouseY = pickedView->viewY + (fboY - pickedView->portY) * ((double) pickedView->viewHeight / pickedView->portHeight);
+    // The port (screen rect) stays on the view, but the world rect comes from the view's assigned camera (it scrolls as the camera follows its target).
+    RuntimeView* pickedView = (pickedViewIndex >= 0) ? &runner->views[pickedViewIndex] : nullptr;
+    GMLCamera* pickedCamera = (pickedViewIndex >= 0) ? Runner_getCameraForView(runner, pickedViewIndex) : nullptr;
+
+    if (pickedView != nullptr && pickedCamera != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0) {
+        runner->mouse->mouseX = pickedCamera->viewX + (fboX - pickedView->portX) * ((double) pickedCamera->viewWidth / pickedView->portWidth);
+        runner->mouse->mouseY = pickedCamera->viewY + (fboY - pickedView->portY) * ((double) pickedCamera->viewHeight / pickedView->portHeight);
     } else if (viewsEnabled && screenViewCount == 0) {
         // No enabled view renders to screen (all redirect to surfaces). Mouse is in room space.
         int32_t roomW = runner->currentRoom->width;
