@@ -2340,8 +2340,8 @@ void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, doub
     runner->mouse->screenY = fboY;
 
     // GUI space is just the FBO normalized to [0,1] (no camera involved), consumed by device_mouse_*_to_gui.
-    runner->mouse->normalizedX = gameW > 0 ? fboX / gameW : 0.0;
-    runner->mouse->normalizedY = gameH > 0 ? fboY / gameH : 0.0;
+    runner->mouse->normalizedX = gameW > 0 ? fboX / gameW : (double) 0.0;
+    runner->mouse->normalizedY = gameH > 0 ? fboY / gameH : (double) 0.0;
 }
 
 void Runner_getMouseRoomPosition(Runner* runner, GMLReal* outX, GMLReal* outY) {
