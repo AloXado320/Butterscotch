@@ -2333,9 +2333,18 @@ void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, doub
     RuntimeView* pickedView = (pickedViewIndex >= 0) ? &runner->views[pickedViewIndex] : nullptr;
     GMLCamera* pickedCamera = (pickedViewIndex >= 0) ? Runner_getCameraForView(runner, pickedViewIndex) : nullptr;
 
-    if (pickedView != nullptr && pickedCamera != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0) {
-        runner->mouse->mouseX = pickedCamera->viewX + (fboX - pickedView->portX) * ((double) pickedCamera->viewWidth / pickedView->portWidth);
-        runner->mouse->mouseY = pickedCamera->viewY + (fboY - pickedView->portY) * ((double) pickedCamera->viewHeight / pickedView->portHeight);
+    if (pickedView != nullptr && pickedCamera != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0 && pickedCamera->viewWidth > 0 && pickedCamera->viewHeight > 0) {
+        // Map the cursor through the inverse of the camera's world->clip projection (the same matrix the renderer draws with): cursor -> NDC within the port -> world.
+        Matrix4f worldToClip, clipToWorld;
+        Matrix4f_viewProjection(&worldToClip, (float) pickedCamera->viewX, (float) pickedCamera->viewY, (float) pickedCamera->viewWidth, (float) pickedCamera->viewHeight, pickedCamera->viewAngle);
+        Matrix4f_inverse(&clipToWorld, &worldToClip);
+
+        float ndcX = (float) ((fboX - pickedView->portX) / pickedView->portWidth) * 2.0f - 1.0f;
+        float ndcY = 1.0f - (float) ((fboY - pickedView->portY) / pickedView->portHeight) * 2.0f;
+        float worldX, worldY;
+        Matrix4f_transformPoint(&clipToWorld, ndcX, ndcY, &worldX, &worldY);
+        runner->mouse->mouseX = worldX;
+        runner->mouse->mouseY = worldY;
     } else if (viewsEnabled && screenViewCount == 0) {
         // No enabled view renders to screen (all redirect to surfaces). Mouse is in room space.
         int32_t roomW = runner->currentRoom->width;
