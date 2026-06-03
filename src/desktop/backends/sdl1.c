@@ -71,6 +71,8 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         }
     }
 
+    SDL_WM_SetCaption(title, NULL);
+
     SDL_EnableKeyRepeat(0, 0);
 
     return true;

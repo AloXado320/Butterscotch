@@ -10,6 +10,7 @@
 #include <signal.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <mmsystem.h>
 #endif
 #ifdef __GLIBC__
 #include <malloc.h>
@@ -772,6 +773,9 @@ static void onCrashSignal(int sig) {
 // ===[ MAIN ]===
 int main(int argc, char* argv[]) {
     setbuf(stderr, NULL);
+#ifdef _WIN32
+    timeBeginPeriod(1);
+#endif
 
     CommandLineArgs args;
     parseCommandLineArgs(&args, argc, argv);
@@ -1651,6 +1655,9 @@ int main(int argc, char* argv[]) {
             arrfree(newArguments);
         }
 
+#ifdef _WIN32
+        timeEndPeriod(1);
+#endif
         printf("Bye! :3\n");
     }
 }
