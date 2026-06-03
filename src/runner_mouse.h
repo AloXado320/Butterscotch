@@ -17,7 +17,8 @@
 #define GML_MOUSE_BUTTON_COUNT 5
 
 typedef struct RunnerMouseState {
-    double mouseX, mouseY;
+    // Cursor cached in app-surface (FBO) pixel space
+    double screenX, screenY;
     double normalizedX, normalizedY;
     bool buttonDown[GML_MOUSE_BUTTON_COUNT];
     bool buttonPressed[GML_MOUSE_BUTTON_COUNT];

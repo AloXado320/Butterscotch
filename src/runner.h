@@ -594,6 +594,8 @@ void Runner_drawBackgrounds(Runner* runner, bool foreground);
 void Runner_computeViewDisplayScale(Runner* runner, int32_t gameW, int32_t gameH, float* outScaleX, float* outScaleY);
 void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displayScaleX, float displayScaleY, bool debugShowCollisionMasks);
 void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, double mx, double my);
+// Converts the cached screen-space cursor (RunnerMouseState.screenX/screenY) to room/world coordinates using the LIVE camera/view state.
+void Runner_getMouseRoomPosition(Runner* runner, GMLReal* outX, GMLReal* outY);
 // Resolves a camera id (slot index) to its pool entry, or nullptr if out of range / not allocated.
 GMLCamera* Runner_getCameraById(Runner* runner, int32_t id);
 // Resolves the camera assigned to a view, or nullptr if the view index is invalid or has no allocated camera.

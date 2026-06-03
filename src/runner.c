@@ -2330,17 +2330,43 @@ static bool adaptPath(Runner* runner, Instance* inst) {
 void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, double mx, double my) {
     if (winW <= 0 || winH <= 0 || runner->currentRoom == nullptr) return;
 
-    // Map window pixel -> FBO pixel. The FBO is blit-stretched to fill the window game area (accounting for letterboxing).
     int32_t gameW = runner->renderGameW > 0 ? runner->renderGameW : runner->currentRoom->width;
     int32_t gameH = runner->renderGameH > 0 ? runner->renderGameH : runner->currentRoom->height;
 
     double fboX = ((mx - runner->viewportX) / runner->viewportW) * gameW;
     double fboY = ((my - runner->viewportY) / runner->viewportH) * gameH;
 
-    // Find the view whose port rect contains the cursor; fall back to the first enabled view, then to a default (0,0,roomW,roomH) mapping when no views are enabled.
+    runner->mouse->screenX = fboX;
+    runner->mouse->screenY = fboY;
+
+    // GUI space is just the FBO normalized to [0,1] (no camera involved), consumed by device_mouse_*_to_gui.
+    runner->mouse->normalizedX = gameW > 0 ? fboX / gameW : 0.0;
+    runner->mouse->normalizedY = gameH > 0 ? fboY / gameH : 0.0;
+}
+
+void Runner_getMouseRoomPosition(Runner* runner, GMLReal* outX, GMLReal* outY) {
+    double fboX = runner->mouse->screenX;
+    double fboY = runner->mouse->screenY;
+
+    if (runner->currentRoom == nullptr) {
+        *outX = (GMLReal) fboX;
+        *outY = (GMLReal) fboY;
+        return;
+    }
+
+    int32_t gameW = runner->renderGameW > 0 ? runner->renderGameW : runner->currentRoom->width;
+    int32_t gameH = runner->renderGameH > 0 ? runner->renderGameH : runner->currentRoom->height;
+
+    // The renderer scales every view port from app-surface space into FBO space by this factor (see Runner_drawViews).
+    // The cursor (fboX/fboY) is already in FBO space, so the port rects we compare/divide by must be scaled the same way,
+    // otherwise the mapping is wrong whenever displayScale != 1 (e.g. the widescreen hack widens the FBO but not the ports).
+    float displayScaleX, displayScaleY;
+    Runner_computeViewDisplayScale(runner, gameW, gameH, &displayScaleX, &displayScaleY);
+
+    // Find the view whose (FBO-space) port rect contains the cursor; fall back to the first enabled view, then to a default mapping when no views are enabled.
     // Native runner rule (GR_Window_Views_Convert): count enabled views that render directly to screen (view_surface_id == -1).
     // If any exist, map via the one whose port contains the cursor (or fall through to the last one tried).
-    // If ALL enabled views have a surface bound, use room-space mapping scaled by the window, since the game is manually compositing those surfaces onto the window.
+    // If ALL enabled views have a surface bound, use room-space mapping, since the game is manually compositing those surfaces onto the window.
     bool viewsEnabled = (runner->currentRoom->flags & 1) != 0;
     int32_t screenViewCount = 0;
     int32_t pickedViewIndex = -1;
@@ -2351,7 +2377,11 @@ void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, doub
             if (!v->enabled || runner->viewSurfaceIds[vi] != -1) continue;
             screenViewCount++;
             lastScreenViewIndex = (int32_t) vi;
-            if (fboX >= v->portX && fboX < v->portX + v->portWidth && fboY >= v->portY && fboY < v->portY + v->portHeight) {
+            int32_t portX = (int32_t) ((float) v->portX * displayScaleX + 0.5f);
+            int32_t portY = (int32_t) ((float) v->portY * displayScaleY + 0.5f);
+            int32_t portW = (int32_t) ((float) v->portWidth * displayScaleX + 0.5f);
+            int32_t portH = (int32_t) ((float) v->portHeight * displayScaleY + 0.5f);
+            if (fboX >= portX && fboX < portX + portW && fboY >= portY && fboY < portY + portH) {
                 pickedViewIndex = (int32_t) vi;
                 break;
             }
@@ -2364,26 +2394,40 @@ void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, doub
     GMLCamera* pickedCamera = (pickedViewIndex >= 0) ? Runner_getCameraForView(runner, pickedViewIndex) : nullptr;
 
     if (pickedView != nullptr && pickedCamera != nullptr && pickedView->portWidth > 0 && pickedView->portHeight > 0 && pickedCamera->viewWidth > 0 && pickedCamera->viewHeight > 0) {
-        // Map the cursor through the inverse of the camera's world->clip projection (the same matrix the renderer draws with): cursor -> NDC within the port -> world.
+        // Apply the SAME widescreen view expansion the renderer uses in Runner_drawViews, so the inverse mapping matches the pixels actually drawn.
+        int32_t widescreenBaseW = gameW - runner->widescreenExtraWidth;
+        int32_t widescreenBaseH = gameH - runner->widescreenExtraHeight;
+        int32_t viewX, viewY, viewW, viewH;
+        expandViewAxis(pickedCamera->viewX, pickedCamera->viewWidth, gameW, widescreenBaseW, &viewX, &viewW);
+        expandViewAxis(pickedCamera->viewY, pickedCamera->viewHeight, gameH, widescreenBaseH, &viewY, &viewH);
+        if (runner->widescreenExtraWidth > 0) viewX = clampExpandedView(viewX, viewW, (int32_t) runner->currentRoom->width);
+        if (runner->widescreenExtraHeight > 0) viewY = clampExpandedView(viewY, viewH, (int32_t) runner->currentRoom->height);
+
+        // Scale the picked view's port into FBO space exactly as Runner_drawViews does.
+        int32_t portX = (int32_t) ((float) pickedView->portX * displayScaleX + 0.5f);
+        int32_t portY = (int32_t) ((float) pickedView->portY * displayScaleY + 0.5f);
+        int32_t portW = (int32_t) ((float) pickedView->portWidth * displayScaleX + 0.5f);
+        int32_t portH = (int32_t) ((float) pickedView->portHeight * displayScaleY + 0.5f);
+
+        // Map the cursor through the inverse of the view's world->clip projection (the same matrix the renderer draws with): cursor -> NDC within the port -> world.
         Matrix4f worldToClip, clipToWorld;
-        Matrix4f_viewProjection(&worldToClip, (float) pickedCamera->viewX, (float) pickedCamera->viewY, (float) pickedCamera->viewWidth, (float) pickedCamera->viewHeight, pickedCamera->viewAngle);
+        Matrix4f_viewProjection(&worldToClip, (float) viewX, (float) viewY, (float) viewW, (float) viewH, pickedCamera->viewAngle);
         Matrix4f_inverse(&clipToWorld, &worldToClip);
 
-        float ndcX = (float) ((fboX - pickedView->portX) / pickedView->portWidth) * 2.0f - 1.0f;
-        float ndcY = 1.0f - (float) ((fboY - pickedView->portY) / pickedView->portHeight) * 2.0f;
+        float ndcX = (float) ((fboX - portX) / portW) * 2.0f - 1.0f;
+        float ndcY = 1.0f - (float) ((fboY - portY) / portH) * 2.0f;
         float worldX, worldY;
         Matrix4f_transformPoint(&clipToWorld, ndcX, ndcY, &worldX, &worldY);
-        runner->mouse->mouseX = worldX;
-        runner->mouse->mouseY = worldY;
+        *outX = (GMLReal) worldX;
+        *outY = (GMLReal) worldY;
     } else if (viewsEnabled && screenViewCount == 0) {
         // No enabled view renders to screen (all redirect to surfaces). Mouse is in room space.
-        int32_t roomW = runner->currentRoom->width;
-        int32_t roomH = runner->currentRoom->height;
-        runner->mouse->mouseX = (mx / winW) * roomW;
-        runner->mouse->mouseY = (my / winH) * roomH;
+        *outX = (GMLReal) (runner->mouse->normalizedX * runner->currentRoom->width);
+        *outY = (GMLReal) (runner->mouse->normalizedY * runner->currentRoom->height);
     } else {
-        runner->mouse->mouseX = fboX;
-        runner->mouse->mouseY = fboY;
+        // No views enabled: the renderer maps the FBO directly to world, shifted by the widescreen origin offset (matches the fullscreen path in Runner_drawViews).
+        *outX = (GMLReal) (fboX - runner->widescreenExtraWidth / 2);
+        *outY = (GMLReal) (fboY - runner->widescreenExtraHeight / 2);
     }
 }
 
@@ -2408,8 +2452,8 @@ static void dispatchMouseEvents(Runner* runner) {
     RunnerMouseState* mouse = runner->mouse;
     DataWin* dataWin = runner->dataWin;
 
-    GMLReal mx = mouse->mouseX;
-    GMLReal my = mouse->mouseY;
+    GMLReal mx, my;
+    Runner_getMouseRoomPosition(runner, &mx, &my);
 
     // ---[ Global events: fire for all objects regardless of mouse position ]---
 

@@ -910,11 +910,16 @@ RValue VMBuiltins_getVariable(VMContext* ctx, int16_t builtinVarId, const char* 
         case BUILTIN_VAR_KEYBOARD_LASTKEY:
             return RValue_makeReal((GMLReal) runner->keyboard->lastKey);
 
-        // Mouse
-        case BUILTIN_VAR_MOUSE_X:
-            return RValue_makeReal((GMLReal) runner->mouse->mouseX);
-        case BUILTIN_VAR_MOUSE_Y:
-            return RValue_makeReal((GMLReal) runner->mouse->mouseY);
+        case BUILTIN_VAR_MOUSE_X: {
+            GMLReal mouseRoomX, mouseRoomY;
+            Runner_getMouseRoomPosition(runner, &mouseRoomX, &mouseRoomY);
+            return RValue_makeReal(mouseRoomX);
+        }
+        case BUILTIN_VAR_MOUSE_Y: {
+            GMLReal mouseRoomX, mouseRoomY;
+            Runner_getMouseRoomPosition(runner, &mouseRoomX, &mouseRoomY);
+            return RValue_makeReal(mouseRoomY);
+        }
 
         // Surfaces
         case BUILTIN_VAR_APPLICATION_SURFACE:
@@ -9284,7 +9289,9 @@ static RValue builtinDeviceMouseX(VMContext* ctx, RValue* args, int32_t argCount
     // We only support mouse 0 for now (device 0)
     int32_t device = RValue_toInt32(args[0]);
     if (device != 0) return RValue_makeReal(0.0);
-    return RValue_makeReal(runner->mouse->mouseX);
+    GMLReal mouseRoomX, mouseRoomY;
+    Runner_getMouseRoomPosition(runner, &mouseRoomX, &mouseRoomY);
+    return RValue_makeReal(mouseRoomX);
 }
 
 static RValue builtinDeviceMouseY(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -9293,7 +9300,9 @@ static RValue builtinDeviceMouseY(VMContext* ctx, RValue* args, int32_t argCount
     // We only support mouse 0 for now (device 0)
     int32_t device = RValue_toInt32(args[0]);
     if (device != 0) return RValue_makeReal(0.0);
-    return RValue_makeReal(runner->mouse->mouseY);
+    GMLReal mouseRoomX, mouseRoomY;
+    Runner_getMouseRoomPosition(runner, &mouseRoomX, &mouseRoomY);
+    return RValue_makeReal(mouseRoomY);
 }
 
 static RValue builtinDeviceMouseXToGui(VMContext* ctx, RValue* args, int32_t argCount) {
