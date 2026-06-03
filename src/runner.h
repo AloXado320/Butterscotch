@@ -85,6 +85,9 @@
 
 #define MAX_VIEWS 8
 #define MAX_SURFACES 16
+#define MAX_DEFAULT_ROOM_CAMERAS MAX_VIEWS
+#define MAX_USER_CAMERAS 56
+#define MAX_CAMERAS (MAX_DEFAULT_ROOM_CAMERAS + MAX_USER_CAMERAS)
 
 // ===[ Operating System Types ]===
 // See GameMaker-HTML5's Globals.js
@@ -124,21 +127,26 @@ typedef enum {
 
 typedef struct {
     bool enabled;
-    int32_t viewX;
-    int32_t viewY;
-    int32_t viewWidth;
-    int32_t viewHeight;
     int32_t portX;
     int32_t portY;
     int32_t portWidth;
     int32_t portHeight;
+    int32_t cameraId;
+} RuntimeView;
+
+typedef struct {
+    bool allocated; // slot in use (default cameras: set when the room enables the view; user cameras: camera_create/destroy)
+    int32_t viewX;
+    int32_t viewY;
+    int32_t viewWidth;
+    int32_t viewHeight;
     uint32_t borderX;
     uint32_t borderY;
     int32_t speedX;
     int32_t speedY;
-    int32_t objectId;
+    int32_t objectId; // follow target (object index), -1 = none
     float viewAngle;
-} RuntimeView;
+} GMLCamera;
 
 typedef struct {
     bool visible;
@@ -358,6 +366,7 @@ typedef struct {
     TileLayerMapEntry* tileLayerMap; // stb_ds hashmap: depth -> tile layer state
     RuntimeLayer* runtimeLayers; // stb_ds array, index-parallel to currentRoom->layers
     RuntimeView views[MAX_VIEWS];
+    GMLCamera defaultCameras[MAX_DEFAULT_ROOM_CAMERAS]; // whole-array snapshot of Runner.defaultCameras (room-scoped)
 } SavedRoomState;
 
 // One flattened collision event entry. Mirrors ObjectEvent but adds the resolved codeId and ownerObjectIndex (the ancestor that actually defines the event) so dispatch needs no event-table lookup.
@@ -420,6 +429,8 @@ struct Runner {
     RunnerKeyboardState* keyboard;
     RunnerMouseState* mouse;
     RuntimeView views[MAX_VIEWS];
+    GMLCamera defaultCameras[MAX_DEFAULT_ROOM_CAMERAS];
+    GMLCamera userCameras[MAX_USER_CAMERAS];
     RunnerGamepadState* gamepads;
     RuntimeBackground backgrounds[8];
     uint32_t backgroundColor;      // runtime-mutable (BGR format)
@@ -581,6 +592,10 @@ void Runner_drawBackgrounds(Runner* runner, bool foreground);
 void Runner_computeViewDisplayScale(Runner* runner, int32_t gameW, int32_t gameH, float* outScaleX, float* outScaleY);
 void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displayScaleX, float displayScaleY, bool debugShowCollisionMasks);
 void Runner_updateMousePosition(Runner* runner, int32_t winW, int32_t winH, double mx, double my);
+// Resolves a camera id (slot index) to its pool entry, or nullptr if out of range / not allocated.
+GMLCamera* Runner_getCameraById(Runner* runner, int32_t id);
+// Resolves the camera assigned to a view, or nullptr if the view index is invalid or has no allocated camera.
+GMLCamera* Runner_getCameraForView(Runner* runner, int32_t viewIndex);
 void Runner_scrollBackgrounds(Runner* runner);
 void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY);
 // Allocates a fresh GML struct and registers it in instancesById and structInstances.

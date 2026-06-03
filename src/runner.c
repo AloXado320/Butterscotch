@@ -991,16 +991,19 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, float displa
         repeat(MAX_VIEWS, vi) {
             RuntimeView* view = &runner->views[vi];
             if (!view->enabled) continue;
+            // Geometry comes from the assigned camera (source of truth); the viewport (port) stays on the view.
+            GMLCamera* camera = Runner_getCameraForView(runner, (int32_t) vi);
+            if (camera == nullptr) continue;
 
-            int32_t viewX = view->viewX;
-            int32_t viewY = view->viewY;
-            int32_t viewW = view->viewWidth;
-            int32_t viewH = view->viewHeight;
+            int32_t viewX = camera->viewX;
+            int32_t viewY = camera->viewY;
+            int32_t viewW = camera->viewWidth;
+            int32_t viewH = camera->viewHeight;
             int32_t portX = (int32_t) ((float) view->portX * displayScaleX + 0.5f);
             int32_t portY = (int32_t) ((float) view->portY * displayScaleY + 0.5f);
             int32_t portW = (int32_t) ((float) view->portWidth * displayScaleX + 0.5f);
             int32_t portH = (int32_t) ((float) view->portHeight * displayScaleY + 0.5f);
-            float viewAngle = view->viewAngle;
+            float viewAngle = camera->viewAngle;
 
             runner->viewCurrent = (int32_t) vi;
             renderer->vtable->beginView(renderer, viewX, viewY, viewW, viewH, portX, portY, portW, portH, viewAngle);
@@ -1125,22 +1128,44 @@ static void returnPersistentInstances(Runner* runner, Instance** carriedPersiste
     arrfree(carriedPersistent);
 }
 
+GMLCamera* Runner_getCameraById(Runner* runner, int32_t id) {
+    GMLCamera* camera;
+    if (0 > id) return nullptr;
+    else if (MAX_DEFAULT_ROOM_CAMERAS > id) camera = &runner->defaultCameras[id];
+    else if (MAX_CAMERAS > id) camera = &runner->userCameras[id - MAX_DEFAULT_ROOM_CAMERAS];
+    else return nullptr;
+    if (!camera->allocated) return nullptr;
+    return camera;
+}
+
+GMLCamera* Runner_getCameraForView(Runner* runner, int32_t viewIndex) {
+    if (0 > viewIndex || viewIndex >= MAX_VIEWS) return nullptr;
+    return Runner_getCameraById(runner, runner->views[viewIndex].cameraId);
+}
+
+// Populates a default camera (slot == view index) from parsed room view data.
+static void initDefaultCameraFromRoomView(GMLCamera* camera, RoomView* roomView) {
+    camera->allocated = true;
+    camera->viewX = roomView->viewX;
+    camera->viewY = roomView->viewY;
+    camera->viewWidth = roomView->viewWidth;
+    camera->viewHeight = roomView->viewHeight;
+    camera->borderX = roomView->borderX;
+    camera->borderY = roomView->borderY;
+    camera->speedX = roomView->speedX;
+    camera->speedY = roomView->speedY;
+    camera->objectId = roomView->objectId;
+    camera->viewAngle = 0;
+}
+
+// Copies the viewport (port) properties and enabled flag from parsed room data.
+// Geometry goes to the camera (see initDefaultCameraFromRoomView); cameraId is assigned by the caller, which knows the view index.
 static void copyRoomViewToRuntimeView(RoomView* roomView, RuntimeView* runtimeView) {
     runtimeView->enabled = roomView->enabled;
-    runtimeView->viewX = roomView->viewX;
-    runtimeView->viewY = roomView->viewY;
-    runtimeView->viewWidth = roomView->viewWidth;
-    runtimeView->viewHeight = roomView->viewHeight;
     runtimeView->portX = roomView->portX;
     runtimeView->portY = roomView->portY;
     runtimeView->portWidth = roomView->portWidth;
     runtimeView->portHeight = roomView->portHeight;
-    runtimeView->borderX = roomView->borderX;
-    runtimeView->borderY = roomView->borderY;
-    runtimeView->speedX = roomView->speedX;
-    runtimeView->speedY = roomView->speedY;
-    runtimeView->objectId = roomView->objectId;
-    runtimeView->viewAngle = 0;
 }
 
 static void initRoom(Runner* runner, int32_t roomIndex) {
@@ -1177,6 +1202,8 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
     // If this is a persistent room that was previously visited, restore saved state
     if (room->persistent && savedState->initialized) {
         memcpy(runner->views, savedState->views, sizeof(runner->views));
+        // Restore the room-scoped default cameras (whole array); user cameras are global and left untouched.
+        memcpy(runner->defaultCameras, savedState->defaultCameras, sizeof(runner->defaultCameras));
 
         // Restore backgrounds from saved state
         memcpy(runner->backgrounds, savedState->backgrounds, sizeof(runner->backgrounds));
@@ -1214,9 +1241,12 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
 
     // === Normal room initialization (first visit, or non-persistent room) ===
 
-    // Initialize the views from scratch
+    // Initialize the views and their default cameras from scratch.
     repeat(MAX_VIEWS, vi) {
-        copyRoomViewToRuntimeView(&room->views[vi], &runner->views[vi]);
+        RoomView* roomView = &room->views[vi];
+        copyRoomViewToRuntimeView(roomView, &runner->views[vi]);
+        initDefaultCameraFromRoomView(&runner->defaultCameras[vi], roomView);
+        runner->views[vi].cameraId = (int32_t) vi;
     }
 
     // Reset tile layer state for the new room
@@ -2708,12 +2738,14 @@ static void updateViews(Runner* runner) {
 
     repeat(MAX_VIEWS, vi) {
         RuntimeView* view = &runner->views[vi];
-        if (!view->enabled || 0 > view->objectId) continue;
+        if (!view->enabled) continue;
+        GMLCamera* camera = Runner_getCameraForView(runner, (int32_t) vi);
+        if (camera == nullptr || 0 > camera->objectId) continue;
 
         // Find first active instance of the target object.
         Instance* target = nullptr;
-        if (view->objectId >= 0 && runner->dataWin->objt.count > (uint32_t) view->objectId) {
-            Instance** bucket = runner->instancesByObject[view->objectId];
+        if (camera->objectId >= 0 && runner->dataWin->objt.count > (uint32_t) camera->objectId) {
+            Instance** bucket = runner->instancesByObject[camera->objectId];
             int32_t bucketCount = (int32_t) arrlen(bucket);
             repeat(bucketCount, i) {
                 if (bucket[i]->active) { target = bucket[i]; break; }
@@ -2723,8 +2755,8 @@ static void updateViews(Runner* runner) {
         if (target != nullptr) {
             int32_t ix = (int32_t) GMLReal_floor(target->x);
             int32_t iy = (int32_t) GMLReal_floor(target->y);
-            view->viewX = followAxis(view->viewX, view->viewWidth, ix, view->borderX, view->speedX, (int32_t) room->width);
-            view->viewY = followAxis(view->viewY, view->viewHeight, iy, view->borderY, view->speedY, (int32_t) room->height);
+            camera->viewX = followAxis(camera->viewX, camera->viewWidth, ix, camera->borderX, camera->speedX, (int32_t) room->width);
+            camera->viewY = followAxis(camera->viewY, camera->viewHeight, iy, camera->borderY, camera->speedY, (int32_t) room->height);
         }
     }
 }
@@ -2825,6 +2857,8 @@ static void persistRoomState(Runner* runner, int32_t roomIndex) {
     // Save room visual state
     memcpy(state->backgrounds, runner->backgrounds, sizeof(runner->backgrounds));
     memcpy(state->views, runner->views, sizeof(runner->views));
+    // Snapshot the room-scoped default cameras (whole array); user cameras are global and not snapshotted.
+    memcpy(state->defaultCameras, runner->defaultCameras, sizeof(state->defaultCameras));
     state->backgroundColor = runner->backgroundColor;
     state->drawBackgroundColor = runner->drawBackgroundColor;
 

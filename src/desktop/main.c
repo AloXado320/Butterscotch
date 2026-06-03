@@ -49,7 +49,7 @@
 #include "utils.h"
 #include "profiler.h"
 
-enum gfx_api gfx;
+enum GraphicsAPI gfx;
 
 #if !defined(ENABLE_GLES) && (defined(ENABLE_MODERN_GL) || defined(ENABLE_LEGACY_GL))
 static void APIENTRY glDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, MAYBE_UNUSED GLsizei length, const GLchar* message, MAYBE_UNUSED const void* userParam) {
@@ -156,6 +156,7 @@ typedef struct {
     char** gameArgs; // stb_ds array of owned strings, gameArgs[0] = runner executable path
     bool lazyRooms;
     StringBooleanEntry* eagerRooms; // stb_ds string-keyed set of room names
+    bool lazyTextures;
     int profilerFramesBetween; // 0 = disabled
 #ifdef ENABLE_VM_OPCODE_PROFILER
     bool opcodeProfiler;
@@ -309,6 +310,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"profile-gml-scripts", required_argument, nullptr, 'q'},
         {"save-folder", required_argument, nullptr, 'B'},
         {"game-args", required_argument, nullptr, 'N'},
+        {"lazy-textures", no_argument, nullptr, 'L'},
 #ifdef ENABLE_VM_OPCODE_PROFILER
         {"profile-opcodes", no_argument, nullptr, 'Q'},
 #endif
@@ -391,6 +393,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 break;
             case 'l':
                 shput(args->instanceLifecyclesToBeTraced, optarg, true);
+                break;
+            case 'L':
+                args->lazyTextures = true;
                 break;
             case 'e':
                 shput(args->eventsToBeTraced, optarg, true);
@@ -1102,6 +1107,20 @@ int main(int argc, char* argv[]) {
 
         // Initialize the runner
         Runner* runner = Runner_create(dataWin, vm, renderer, (FileSystem*) overlayFs, audioSystem);
+
+        if (!args.lazyTextures) {
+            repeat(runner->dataWin->txtr.count, i) {
+#ifdef ENABLE_MODERN_GL
+                if (gfx == MODERN_GL)
+                    GLRenderer_ensureTextureLoaded((GLRenderer*) renderer, (int32_t) i);
+#endif
+
+#ifdef ENABLE_LEGACY_GL
+                if (gfx == LEGACY_GL)
+                    GLLegacyRenderer_ensureTextureLoaded((GLLegacyRenderer*) renderer, (int32_t) i);
+#endif
+            }
+        }
         runner->debugMode = args.debug;
         runner->osType = args.osType;
         runner->setWindowSize = platformSetWindowSize;

@@ -421,7 +421,7 @@ static void glClearScreen(Renderer* renderer, uint32_t color, float alpha) {
 
 // Lazily decodes and uploads a TXTR page on first access.
 // Returns true if the texture is ready, false if it failed to decode.
-static bool ensureTextureLoaded(GLRenderer* gl, uint32_t pageId) {
+bool GLRenderer_ensureTextureLoaded(GLRenderer* gl, uint32_t pageId) {
     if (gl->textureLoaded[pageId]) return (gl->textureWidths[pageId] != 0);
 
     gl->textureLoaded[pageId] = true;
@@ -459,7 +459,7 @@ static bool resolveSpriteTexture(GLRenderer* gl, int32_t tpagIndex, TexturePageI
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return false;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
+    if (!GLRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
     *outTpag = tpag;
     *outTexId = gl->glTextures[pageId];
     *outTexW = gl->textureWidths[pageId];
@@ -546,7 +546,7 @@ static void glDrawSpritePart(Renderer* renderer, int32_t tpagIndex, int32_t srcO
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return;
+    if (!GLRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return;
 
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
@@ -872,7 +872,7 @@ static bool glResolveFontState(GLRenderer* gl, DataWin* dw, Font* font, GlFontSt
         state->fontTpag = &dw->tpag.items[fontTpagIndex];
         int16_t pageId = state->fontTpag->texturePageId;
         if (0 > pageId || (uint32_t) pageId >= gl->textureCount) return false;
-        if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
+        if (!GLRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
 
         state->texId = gl->glTextures[pageId];
         state->texW = gl->textureWidths[pageId];
@@ -898,7 +898,7 @@ static bool glResolveGlyph(GLRenderer* gl, DataWin* dw, GlFontState* state, Font
         TexturePageItem* glyphTpag = &dw->tpag.items[tpagIdx];
         int16_t pid = glyphTpag->texturePageId;
         if (0 > pid || (uint32_t) pid >= gl->textureCount) return false;
-        if (!ensureTextureLoaded(gl, (uint32_t) pid)) return false;
+        if (!GLRenderer_ensureTextureLoaded(gl, (uint32_t) pid)) return false;
 
         *outTexId = gl->glTextures[pid];
         int32_t tw = gl->textureWidths[pid];
@@ -1722,5 +1722,6 @@ Renderer* GLRenderer_create(void) {
     gl->base.drawHalign = 0;
     gl->base.drawValign = 0;
     gl->base.circlePrecision = 24;
+
     return (Renderer*) gl;
 }

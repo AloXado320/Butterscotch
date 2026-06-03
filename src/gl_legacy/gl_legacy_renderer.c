@@ -267,7 +267,7 @@ static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float
 
 // Lazily decodes and uploads a TXTR page on first access.
 // Returns true if the texture is ready, false if it failed to decode.
-static bool ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId) {
+bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId) {
     if (gl->textureLoaded[pageId]) return (gl->textureWidths[pageId] != 0);
 
     gl->textureLoaded[pageId] = true;
@@ -329,7 +329,7 @@ static void glDrawSprite(Renderer* renderer, int32_t tpagIndex, float x, float y
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return;
+    if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return;
 
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
@@ -403,7 +403,7 @@ static void glDrawTiled(Renderer* renderer, int32_t tpagIndex, float originX, fl
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return;
+    if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return;
 
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
@@ -486,7 +486,7 @@ static void glDrawSpritePos(Renderer* renderer, int32_t tpagIndex, float x1, flo
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return;
+    if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return;
 
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
@@ -528,7 +528,7 @@ static void glDrawSpritePart(Renderer* renderer, int32_t tpagIndex, int32_t srcO
     TexturePageItem* tpag = &dw->tpag.items[tpagIndex];
     int16_t pageId = tpag->texturePageId;
     if (0 > pageId || gl->textureCount <= (uint32_t) pageId) return;
-    if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return;
+    if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return;
 
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
@@ -843,7 +843,7 @@ static bool glResolveFontState(GLLegacyRenderer* gl, DataWin* dw, Font* font, Gl
         state->fontTpag = &dw->tpag.items[fontTpagIndex];
         int16_t pageId = state->fontTpag->texturePageId;
         if (0 > pageId || (uint32_t) pageId >= gl->textureCount) return false;
-        if (!ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
+        if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pageId)) return false;
 
         state->texId = gl->glTextures[pageId];
         state->texW = gl->textureWidths[pageId];
@@ -869,7 +869,7 @@ static bool glResolveGlyph(GLLegacyRenderer* gl, DataWin* dw, GlFontState* state
         TexturePageItem* glyphTpag = &dw->tpag.items[tpagIdx];
         int16_t pid = glyphTpag->texturePageId;
         if (0 > pid || (uint32_t) pid >= gl->textureCount) return false;
-        if (!ensureTextureLoaded(gl, (uint32_t) pid)) return false;
+        if (!GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t) pid)) return false;
 
         *outTexId = gl->glTextures[pid];
         *outTpagIdx = tpagIdx;
