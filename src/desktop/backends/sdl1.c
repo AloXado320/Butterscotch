@@ -41,9 +41,10 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
 
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
+    PLATFORM_CACHE_WINDOW_SIZE(width, height);
     fbWidth = width;
     fbHeight = height;
-    scr = SDL_SetVideoMode(width, height, 0, (gfx == SOFTWARE ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
+    scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (gfx == SOFTWARE ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
 }
 
 void platformGetMousePos(double *xPos, double *yPos) {
@@ -59,11 +60,30 @@ static bool platformGetWindowFocus(void) {
     return SDL_GetAppState() & SDL_APPINPUTFOCUS;
 }
 
+// SDL1.2 redirects stdio messages to stdout.txt and stderr.txt on Windows in SDL_main
+// So set the env variable to 0 before it reaches out main so there's no need to set it manually
+#ifdef _WIN32
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void platformDisableRedirect(void) {
+    SDL_putenv("SDL_STDIO_REDIRECT=0");
+}
+#elif defined(_MSC_VER)
+static int platformDisableRedirect(void) {
+    SDL_putenv("SDL_STDIO_REDIRECT=0");
+    return 0;
+}
+#pragma section(".CRT$XCU", read)
+__declspec(allocate(".CRT$XCU")) static int (*pDisableRedirect)(void) = platformDisableRedirect;
+#endif
+#endif
+
 bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) {
     if (headless && gfx != SOFTWARE) {
         fprintf(stderr, "Headless mode on SDL 1.2 requires the software renderer!\n");
         return false;
     }
+
+    SDL_putenv("SDL_VIDEO_WINDOW_POS=center");
 
     // Init SDL
     if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER)) {
@@ -71,18 +91,27 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
         return false;
     }
 
-    fbWidth = reqW;
-    fbHeight = reqH;
-    if(!headless) {
+    int finalW = reqW;
+    int finalH = reqH;
+    const SDL_VideoInfo* info = SDL_GetVideoInfo();
+    if (info && (reqW >= info->current_w || reqH >= info->current_h)) {
+        PLATFORM_GET_BEST_FIT_RES(reqW, reqH, info->current_w, info->current_h, finalW, finalH);
+        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
+                reqW, reqH, finalW, finalH);
+    }
+
+    fbWidth = finalW;
+    fbHeight = finalH;
+    if (!headless) {
         scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (gfx == SOFTWARE ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
         if (!scr && gfx == SOFTWARE) {
             SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
             if (modes && modes != (SDL_Rect**) -1 && modes[0]) {
                 fprintf(stderr, "Warning: %dx%d unavailable, falling back to %dx%d: %s\n",
-                        reqW, reqH, modes[0]->w, modes[0]->h, SDL_GetError());
-                scr = SDL_SetVideoMode(modes[0]->w, modes[0]->h, 0, 0);
+                        fbWidth, fbHeight, modes[0]->w, modes[0]->h, SDL_GetError());
                 fbWidth = modes[0]->w;
                 fbHeight = modes[0]->h;
+                scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, 0);
             }
         }
         if (!scr) {
@@ -217,21 +246,30 @@ static int32_t SDLMouseButtonToGml(int sdlButton) {
 bool platformHandleEvents(void) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        switch (e.type) {
+            default:
+                if (InputRecording_isPlaybackActive(globalInputRecording)) continue;
+                break;
+            case SDL_VIDEORESIZE:
+            case SDL_QUIT:
+                break;
+        }
         switch(e.type) {
             case SDL_KEYDOWN:
+                // SDL1.2 needs to manually intercept Alt+F4 to exit properly
+                if (e.key.keysym.sym == SDLK_F4 && (e.key.keysym.mod & KMOD_ALT)) {
+                    return true;
+                }
                 // During playback, suppress real keyboard input
-                if (InputRecording_isPlaybackActive(globalInputRecording)) break;
                 RunnerKeyboard_onKeyDown(g_runner->keyboard, SDLKeyToGml(e.key.keysym.sym));
                 if (e.key.keysym.unicode != 0)
                     RunnerKeyboard_onCharacter(g_runner->keyboard, e.key.keysym.unicode);
                 break;
             case SDL_KEYUP:
                 // During playback, suppress real keyboard input
-                if (InputRecording_isPlaybackActive(globalInputRecording)) break;
                 RunnerKeyboard_onKeyUp(g_runner->keyboard, SDLKeyToGml(e.key.keysym.sym));
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (InputRecording_isPlaybackActive(globalInputRecording)) break;
                 if (e.button.button == SDL_BUTTON_WHEELUP) {
                     RunnerMouse_onWheel(g_runner->mouse, 1.0);
                 } else if (e.button.button == SDL_BUTTON_WHEELDOWN) {
@@ -242,7 +280,6 @@ bool platformHandleEvents(void) {
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
-                if (InputRecording_isPlaybackActive(globalInputRecording)) break;
                 if (e.button.button != SDL_BUTTON_WHEELUP && e.button.button != SDL_BUTTON_WHEELDOWN) {
                     int32_t gmlBtn = SDLMouseButtonToGml(e.button.button);
                     if (gmlBtn >= 0) RunnerMouse_onButtonUp(g_runner->mouse, gmlBtn);

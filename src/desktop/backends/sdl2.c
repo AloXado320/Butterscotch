@@ -60,10 +60,13 @@ static void platformGetWindowScale(float *scale_x, float *scale_y) {
 
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
+    if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
+    PLATFORM_CACHE_WINDOW_SIZE(width, height);
 
     float scale_x, scale_y;
     platformGetWindowScale(&scale_x, &scale_y);
     SDL_SetWindowSize(window, (int)(width / scale_x), (int)(height / scale_y));
+    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
     if (gfx == SOFTWARE)
         scr = SDL_GetWindowSurface(window);
@@ -114,25 +117,36 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
     else
         flags = (gfx == SOFTWARE ? 0 : SDL_WINDOW_OPENGL) | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 
+    int finalW = reqW;
+    int finalH = reqH;
+    SDL_Rect usableBounds;
+    if (SDL_GetDisplayUsableBounds(0, &usableBounds) == 0) {
+        if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
+            PLATFORM_GET_BEST_FIT_RES(reqW, reqH, usableBounds.w, usableBounds.h, finalW, finalH);
+            fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
+                    reqW, reqH, finalW, finalH);
+        }
+    }
+
     window = SDL_CreateWindow(
             title,
             SDL_WINDOWPOS_UNDEFINED,
             SDL_WINDOWPOS_UNDEFINED,
-            reqW, reqH,
+            finalW, finalH,
             flags
     );
     if (!window && gfx == SOFTWARE) {
         SDL_DisplayMode mode;
         if (SDL_GetDisplayMode(0, 0, &mode) == 0) {
             fprintf(stderr, "Warning: %dx%d unavailable, falling back to %dx%d: %s\n",
-                    reqW, reqH, mode.w, mode.h, SDL_GetError());
-            reqW = mode.w;
-            reqH = mode.h;
+                    finalW, finalH, mode.w, mode.h, SDL_GetError());
+            finalW = mode.w;
+            finalH = mode.h;
             window = SDL_CreateWindow(
                     title,
                     SDL_WINDOWPOS_UNDEFINED,
                     SDL_WINDOWPOS_UNDEFINED,
-                    mode.w, mode.h,
+                    finalW, finalH,
                     flags
             );
         }
@@ -151,7 +165,7 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         scr = SDL_GetWindowSurface(window);
 
     // If we don't do this, the window will be larger than it should be on HiDPI displays.
-    platformSetWindowSize(reqW, reqH);
+    platformSetWindowSize(finalW, finalH);
 
     return true;
 }
@@ -324,8 +338,10 @@ bool platformHandleEvents(void) {
         switch (e.type) {
             default:
                 if (InputRecording_isPlaybackActive(globalInputRecording)) continue;
+                break;
             case SDL_WINDOWEVENT:
             case SDL_QUIT:
+                break;
         }
         switch(e.type) {
             case SDL_KEYDOWN:
