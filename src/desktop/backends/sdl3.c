@@ -155,7 +155,7 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         SDL_Rect usableBounds;
         if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds)) {
             /* Open a window so platformGetDisplayScale works */
-            window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN);
+            window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY);
             float scale = 0;
             if (window) {
                 scale = platformGetWindowScale();
