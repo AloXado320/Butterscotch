@@ -102,9 +102,8 @@ void platformGetMousePos(double *xPos, double *yPos) {
     if (!xPos || !yPos) return;
     float mx = 0, my = 0;
     SDL_GetMouseState(&mx, &my);
-    float scale = platformGetWindowScale();
-    *xPos = (double)mx * scale;
-    *yPos = (double)my * scale;
+    *xPos = (double)mx;
+    *yPos = (double)my;
 }
 
 static bool platformGetWindowFocus(void) {
