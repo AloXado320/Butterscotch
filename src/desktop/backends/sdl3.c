@@ -70,16 +70,12 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
     return true;
 }
 
-static float platformGetWindowScale(void) {
-    return SDL_GetWindowPixelDensity(window);
-}
-
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
     if (!platformCacheWindowSize(width, height)) return;
 
-    float scale = platformGetWindowScale();
+    float scale = SDL_GetWindowPixelDensity(window);
 
     SDL_SetWindowSize(window, (int)(width / scale), (int)(height / scale));
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
@@ -157,7 +153,7 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
             window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY);
             float scale = 0;
             if (window) {
-                scale = platformGetWindowScale();
+                scale = SDL_GetWindowPixelDensity(window);
                 SDL_DestroyWindow(window);
                 window = NULL;
             }
