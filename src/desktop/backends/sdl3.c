@@ -154,8 +154,20 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         SDL_DisplayID primaryDisplay = displays[0];
         SDL_Rect usableBounds;
         if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds)) {
-            if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
-                platformGetBestFitRes(reqW, reqH, usableBounds.w, usableBounds.h, &finalW, &finalH);
+            /* Open a window so platformGetDisplayScale works */
+            window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN);
+            float scale = 0;
+            if (window) {
+                scale = platformGetWindowScale();
+                SDL_DestroyWindow(window);
+                window = NULL;
+            }
+            if (scale == 0)
+                scale = 1;
+            int32_t usableW = usableBounds.w * scale;
+            int32_t usableH = usableBounds.h * scale;
+            if (reqW >= usableW || reqH >= usableH) {
+                platformGetBestFitRes(reqW, reqH, usableW, usableH, &finalW, &finalH);
                 fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                         reqW, reqH, finalW, finalH);
             }
