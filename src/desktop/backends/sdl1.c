@@ -83,7 +83,9 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
         return false;
     }
 
+#if SDL_VERSION_ATLEAST(1, 2, 10) // Old SDL1.2: Center pos doesn't matter assuming it's running in low res
     SDL_putenv("SDL_VIDEO_WINDOW_POS=center");
+#endif
 
     // Init SDL
     if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER)) {
@@ -93,12 +95,23 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
 
     int finalW = reqW;
     int finalH = reqH;
+#if SDL_VERSION_ATLEAST(1, 2, 10)
     const SDL_VideoInfo* info = SDL_GetVideoInfo();
     if (info && (reqW >= info->current_w || reqH >= info->current_h)) {
         PLATFORM_GET_BEST_FIT_RES(reqW, reqH, info->current_w, info->current_h, finalW, finalH);
         fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                 reqW, reqH, finalW, finalH);
     }
+#else
+    // Old SDL1.2: Set a period appropriate resolution as fallback
+    int oldW = 1024;
+    int oldH = 768;
+    if (reqW >= oldW || reqH >= oldH) {
+        PLATFORM_GET_BEST_FIT_RES(reqW, reqH, oldW, oldH, finalW, finalH);
+        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
+                reqW, reqH, finalW, finalH);
+    }
+#endif
 
     fbWidth = finalW;
     fbHeight = finalH;
