@@ -81,7 +81,7 @@ void platformSetWindowSize(int32_t width, int32_t height) {
 
     float scale = platformGetWindowScale();
 
-    SDL_SetWindowSize(window, (int)(width / scale_x), (int)(height / scale_y));
+    SDL_SetWindowSize(window, (int)(width / scale), (int)(height / scale));
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
     SDL_SyncWindow(window);
 
