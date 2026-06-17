@@ -71,11 +71,7 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
 }
 
 static float platformGetWindowScale(void) {
-    int32_t draw_w, draw_h;
-    int logical_w, logical_h;
-    platformGetWindowSize(&draw_w, &draw_h);
-    SDL_GetWindowSize(window, &logical_w, &logical_h);
-    return (logical_h > 0) ? (float)draw_h / logical_h : 1.0f;
+    return SDL_GetWindowPixelDensity(window);
 }
 
 void platformSetWindowSize(int32_t width, int32_t height) {
