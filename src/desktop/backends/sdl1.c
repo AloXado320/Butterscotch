@@ -60,21 +60,25 @@ static bool platformGetWindowFocus(void) {
     return SDL_GetAppState() & SDL_APPINPUTFOCUS;
 }
 
-// SDL1.2 redirects stdio messages to stdout.txt and stderr.txt on Windows in SDL_main
-// So set the env variable to 0 before it reaches out main so there's no need to set it manually
-#ifdef _WIN32
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((constructor)) static void platformDisableRedirect(void) {
-    SDL_putenv("SDL_STDIO_REDIRECT=0");
+#if !SDL_VERSION_ATLEAST(1, 2, 10)
+static inline void platformGetTrueDesktopSize(int* outW, int* outH) {
+    SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
+    if (modes != (SDL_Rect**)0 && modes != (SDL_Rect**)-1) {
+        int maxHardwareW = 0;
+        int maxHardwareH = 0;
+        int i;
+
+        for (i = 0; modes[i]; ++i) {
+            if (modes[i]->w > maxHardwareW) maxHardwareW = modes[i]->w;
+            if (modes[i]->h > maxHardwareH) maxHardwareH = modes[i]->h;
+        }
+
+        if (maxHardwareW > 0 && maxHardwareH > 0) {
+            if (maxHardwareW < *outW) *outW = maxHardwareW;
+            if (maxHardwareH < *outH) *outH = maxHardwareH;
+        }
+    }
 }
-#elif defined(_MSC_VER)
-static int platformDisableRedirect(void) {
-    SDL_putenv("SDL_STDIO_REDIRECT=0");
-    return 0;
-}
-#pragma section(".CRT$XCU", read)
-__declspec(allocate(".CRT$XCU")) static int (*pDisableRedirect)(void) = platformDisableRedirect;
-#endif
 #endif
 
 bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) {
@@ -103,9 +107,10 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
                 reqW, reqH, finalW, finalH);
     }
 #else
-    // Old SDL1.2: Set a period appropriate resolution as fallback
-    int oldW = 1024;
-    int oldH = 768;
+    // Old SDL1.2: Set a default lower res then check if the screen supports it, if not, use the max supported res
+    int oldW = 800;
+    int oldH = 600;
+    platformGetTrueDesktopSize(oldW, oldH);
     if (reqW >= oldW || reqH >= oldH) {
         PLATFORM_GET_BEST_FIT_RES(reqW, reqH, oldW, oldH, finalW, finalH);
         fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
