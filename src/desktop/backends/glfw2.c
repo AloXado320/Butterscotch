@@ -57,7 +57,7 @@ static void platformGetTrueDesktopSize(int* outW, int* outH) {
 
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
-    PLATFORM_CACHE_WINDOW_SIZE(width, height);
+    if (!platformCacheWindowSize(width, height)) return;
     glfwSetWindowSize(width, height);
 
     int desktopW, desktopH;
@@ -228,7 +228,7 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
     int finalW = reqW;
     int finalH = reqH;
     if (reqW >= desktopW || reqH >= desktopH) {
-        PLATFORM_GET_BEST_FIT_RES(reqW, reqH, desktopW, desktopH, finalW, finalH);
+        platformGetBestFitRes(reqW, reqH, desktopW, desktopH, &finalW, &finalH);
         fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                 reqW, reqH, finalW, finalH);
     }

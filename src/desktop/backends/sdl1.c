@@ -41,7 +41,7 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
 
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
-    PLATFORM_CACHE_WINDOW_SIZE(width, height);
+    if (!platformCacheWindowSize(width, height)) return;
     fbWidth = width;
     fbHeight = height;
     scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (gfx == SOFTWARE ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
@@ -102,7 +102,7 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
 #if SDL_VERSION_ATLEAST(1, 2, 10)
     const SDL_VideoInfo* info = SDL_GetVideoInfo();
     if (info && (reqW >= info->current_w || reqH >= info->current_h)) {
-        PLATFORM_GET_BEST_FIT_RES(reqW, reqH, info->current_w, info->current_h, finalW, finalH);
+        platformGetBestFitRes(reqW, reqH, info->current_w, info->current_h, &finalW, &finalH);
         fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                 reqW, reqH, finalW, finalH);
     }
@@ -112,7 +112,7 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
     int oldH = 600;
     platformGetTrueDesktopSize(oldW, oldH);
     if (reqW >= oldW || reqH >= oldH) {
-        PLATFORM_GET_BEST_FIT_RES(reqW, reqH, oldW, oldH, finalW, finalH);
+        platformGetBestFitRes(reqW, reqH, oldW, oldH, &finalW, &finalH);
         fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                 reqW, reqH, finalW, finalH);
     }

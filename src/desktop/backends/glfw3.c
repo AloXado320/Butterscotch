@@ -60,7 +60,7 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0 || !window) return;
     if (glfwGetWindowAttrib(window, GLFW_MAXIMIZED)) return;
-    PLATFORM_CACHE_WINDOW_SIZE(width, height);
+    if (!platformCacheWindowSize(width, height)) return;
 
     float xs = 1.0f, ys = 1.0f;
     glfwGetWindowContentScale(window, &xs, &ys);
@@ -245,7 +245,7 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
         int workX, workY, workW, workH;
         glfwGetMonitorWorkarea(primaryMonitor, &workX, &workY, &workW, &workH);
         if (reqW >= workW || reqH >= workH) {
-            PLATFORM_GET_BEST_FIT_RES(reqW, reqH, workW, workH, finalW, finalH);
+            platformGetBestFitRes(reqW, reqH, workW, workH, &finalW, &finalH);
             fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                     reqW, reqH, finalW, finalH);
         }

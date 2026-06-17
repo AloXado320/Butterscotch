@@ -83,7 +83,7 @@ static void platformGetWindowScale(float *scale_x, float *scale_y) {
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
-    PLATFORM_CACHE_WINDOW_SIZE(width, height);
+    if (!platformCacheWindowSize(width, height)) return;
 
     float scale_x, scale_y;
     platformGetWindowScale(&scale_x, &scale_y);
@@ -163,7 +163,7 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         SDL_Rect usableBounds;
         if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds)) {
             if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
-                PLATFORM_GET_BEST_FIT_RES(reqW, reqH, usableBounds.w, usableBounds.h, finalW, finalH);
+                platformGetBestFitRes(reqW, reqH, usableBounds.w, usableBounds.h, &finalW, &finalH);
                 fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                         reqW, reqH, finalW, finalH);
             }
