@@ -70,25 +70,14 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
     return true;
 }
 
-static void platformGetWindowScale(float *scale_x, float *scale_y) {
-    if (!scale_x || !scale_y) return;
-    int32_t draw_w, draw_h;
-    int logical_w, logical_h;
-    platformGetWindowSize(&draw_w, &draw_h);
-    SDL_GetWindowSize(window, &logical_w, &logical_h);
-    *scale_x = (logical_w > 0) ? (float)draw_w / logical_w : 1.0f;
-    *scale_y = (logical_h > 0) ? (float)draw_h / logical_h : 1.0f;
-}
-
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
     if (!platformCacheWindowSize(width, height)) return;
 
-    float scale_x, scale_y;
-    platformGetWindowScale(&scale_x, &scale_y);
+    float scale = SDL_GetWindowPixelDensity(window);
 
-    SDL_SetWindowSize(window, (int)(width / scale_x), (int)(height / scale_y));
+    SDL_SetWindowSize(window, (int)(width / scale), (int)(height / scale));
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
     SDL_SyncWindow(window);
 
@@ -109,10 +98,8 @@ void platformGetMousePos(double *xPos, double *yPos) {
     if (!xPos || !yPos) return;
     float mx = 0, my = 0;
     SDL_GetMouseState(&mx, &my);
-    float scale_x, scale_y;
-    platformGetWindowScale(&scale_x, &scale_y);
-    *xPos = (double)mx * scale_x;
-    *yPos = (double)my * scale_y;
+    *xPos = (double)mx;
+    *yPos = (double)my;
 }
 
 static bool platformGetWindowFocus(void) {
@@ -162,8 +149,20 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         SDL_DisplayID primaryDisplay = displays[0];
         SDL_Rect usableBounds;
         if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds)) {
-            if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
-                platformGetBestFitRes(reqW, reqH, usableBounds.w, usableBounds.h, &finalW, &finalH);
+            /* Open a window so platformGetDisplayScale works */
+            window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+            float scale = 0;
+            if (window) {
+                scale = SDL_GetWindowPixelDensity(window);
+                SDL_DestroyWindow(window);
+                window = NULL;
+            }
+            if (scale == 0)
+                scale = 1;
+            int32_t usableW = usableBounds.w * scale;
+            int32_t usableH = usableBounds.h * scale;
+            if (reqW >= usableW || reqH >= usableH) {
+                platformGetBestFitRes(reqW, reqH, usableW, usableH, &finalW, &finalH);
                 fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
                         reqW, reqH, finalW, finalH);
             }
