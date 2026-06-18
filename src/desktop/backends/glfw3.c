@@ -246,8 +246,8 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
         glfwGetMonitorWorkarea(primaryMonitor, &workX, &workY, &workW, &workH);
         if (reqW >= workW || reqH >= workH) {
             platformGetBestFitRes(reqW, reqH, workW, workH, &finalW, &finalH);
-            fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                    reqW, reqH, finalW, finalH);
+            fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                    reqW, reqH, workW, workH, finalW, finalH);
         }
     }
 

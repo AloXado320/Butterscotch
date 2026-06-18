@@ -103,8 +103,8 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
     const SDL_VideoInfo* info = SDL_GetVideoInfo();
     if (info && (reqW >= info->current_w || reqH >= info->current_h)) {
         platformGetBestFitRes(reqW, reqH, info->current_w, info->current_h, &finalW, &finalH);
-        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                reqW, reqH, finalW, finalH);
+        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                reqW, reqH, info->current_w, info->current_h, finalW, finalH);
     }
 #else
     // Old SDL1.2: Set a default lower res then check if the screen supports it, if not, use the max supported res
@@ -113,8 +113,8 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
     platformGetTrueDesktopSize(oldW, oldH);
     if (reqW >= oldW || reqH >= oldH) {
         platformGetBestFitRes(reqW, reqH, oldW, oldH, &finalW, &finalH);
-        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                reqW, reqH, finalW, finalH);
+        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                reqW, reqH, oldW, oldH, finalW, finalH);
     }
 #endif
 

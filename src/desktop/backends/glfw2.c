@@ -229,8 +229,8 @@ bool platformInit(int32_t reqW, int32_t reqH, const char *title, bool headless) 
     int finalH = reqH;
     if (reqW >= desktopW || reqH >= desktopH) {
         platformGetBestFitRes(reqW, reqH, desktopW, desktopH, &finalW, &finalH);
-        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                reqW, reqH, finalW, finalH);
+        fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                reqW, reqH, desktopW, desktopH, finalW, finalH);
     }
 
     int window = glfwOpenWindow(finalW, finalH, 8, 8, 8, 8, 24, 8, GLFW_WINDOW);
