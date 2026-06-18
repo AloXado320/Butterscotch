@@ -73,15 +73,27 @@ bool platformGetScaledWindowSize(int32_t* outW, int32_t* outH) {
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
+
+    // Account for correct size adjustment for multiple monitors
+    int32_t finalW = width;
+    int32_t finalH = height;
+    SDL_Rect usableBounds;
+    SDL_DisplayID displayID = SDL_GetDisplayForWindow(window);
+    if (displayID == 0) displayID = SDL_GetPrimaryDisplay();
+    if (SDL_GetDisplayUsableBounds(displayID, &usableBounds)) {
+        if (width > usableBounds.w || height > usableBounds.h) {
+            platformGetBestFitRes(width, height, usableBounds.w, usableBounds.h, &finalW, &finalH);
+        }
+    }
+
     if (!platformCacheWindowSize(width, height)) return;
 
-    float scale = SDL_GetWindowPixelDensity(window);
-
-    SDL_SetWindowSize(window, (int)(width / scale), (int)(height / scale));
+    // No scale here for HIDPI, SDL3 seems to do it internally.
+    SDL_SetWindowSize(window, finalW, finalH);
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
     SDL_SyncWindow(window);
 
-    // Move the window a bit down so the title bar is visible on large sizes
+    // Move the window a bit down so the title bar is visible on large sizes.
     int top_border, windowX, windowY;
     SDL_GetWindowBordersSize(window, &top_border, NULL, NULL, NULL);
     SDL_GetWindowPosition(window, &windowX, &windowY);
@@ -149,22 +161,10 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
         SDL_DisplayID primaryDisplay = displays[0];
         SDL_Rect usableBounds;
         if (SDL_GetDisplayUsableBounds(primaryDisplay, &usableBounds)) {
-            /* Open a window so platformGetDisplayScale works */
-            window = SDL_CreateWindow(title, 1, 1, SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-            float scale = 0;
-            if (window) {
-                scale = SDL_GetWindowPixelDensity(window);
-                SDL_DestroyWindow(window);
-                window = NULL;
-            }
-            if (scale == 0)
-                scale = 1;
-            int32_t usableW = usableBounds.w * scale;
-            int32_t usableH = usableBounds.h * scale;
-            if (reqW >= usableW || reqH >= usableH) {
-                platformGetBestFitRes(reqW, reqH, usableW, usableH, &finalW, &finalH);
-                fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                        reqW, reqH, finalW, finalH);
+            if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
+                platformGetBestFitRes(reqW, reqH, usableBounds.w, usableBounds.h, &finalW, &finalH);
+                fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                        reqW, reqH, usableBounds.w, usableBounds.h, finalW, finalH);
             }
         }
     }

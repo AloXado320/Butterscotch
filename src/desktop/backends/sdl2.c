@@ -59,10 +59,24 @@ static float platformGetWindowScale(void) {
 void platformSetWindowSize(int32_t width, int32_t height) {
     if (width <= 0 || height <= 0) return;
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) return;
+
+    // Account for correct size adjustment for multiple monitors
+    int32_t finalW = width;
+    int32_t finalH = height;
+    SDL_Rect usableBounds;
+    int displayIndex = SDL_GetWindowDisplayIndex(window);
+    if (displayIndex < 0) displayIndex = 0;
+    if (SDL_GetDisplayUsableBounds(displayIndex, &usableBounds) == 0) {
+        if (width > usableBounds.w || height > usableBounds.h) {
+            platformGetBestFitRes(width, height, usableBounds.w, usableBounds.h, &finalW, &finalH);
+        }
+    }
+
     if (!platformCacheWindowSize(width, height)) return;
 
+    // Scale window down to account for HIDPI
     float scale = platformGetWindowScale();
-    SDL_SetWindowSize(window, (int)(width / scale), (int)(height / scale));
+    SDL_SetWindowSize(window, (int)(finalW / scale), (int)(finalH / scale));
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
     if (gfx == SOFTWARE)
@@ -119,8 +133,8 @@ bool platformInit(int reqW, int reqH, const char *title, bool headless) {
     if (SDL_GetDisplayUsableBounds(0, &usableBounds) == 0) {
         if (reqW >= usableBounds.w || reqH >= usableBounds.h) {
             platformGetBestFitRes(reqW, reqH, usableBounds.w, usableBounds.h, &finalW, &finalH);
-            fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than the screen, adjusting to %dx%d\n",
-                    reqW, reqH, finalW, finalH);
+            fprintf(stderr, "Warning: Requested resolution %dx%d is bigger than %dx%d, adjusting to %dx%d\n",
+                    reqW, reqH, usableBounds.w, usableBounds.h, finalW, finalH);
         }
     }
 
