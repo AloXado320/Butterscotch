@@ -4181,11 +4181,11 @@ static RValue builtin_ds_map_add(VMContext* ctx, RValue* args, int32_t argCount)
 }
 
 static RValue builtin_ds_map_add_map(VMContext* ctx, RValue* args, int32_t argCount) {
-    return dsMapAddCommon(ctx, args, argCount, true, 1); // Map type
+    return dsMapAddCommon(ctx, args, argCount, true, DS_TYPE_MAP);
 }
 
 static RValue builtin_ds_map_add_list(VMContext* ctx, RValue* args, int32_t argCount) {
-    return dsMapAddCommon(ctx, args, argCount, true, 2); // List type
+    return dsMapAddCommon(ctx, args, argCount, true, DS_TYPE_LIST);
 }
 
 static RValue builtin_ds_map_is_map(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -4199,10 +4199,10 @@ static RValue builtin_ds_map_is_map(VMContext* ctx, RValue* args, int32_t argCou
     if (0 > idx) return RValue_makeBool(false);
 
     RValue val = (*mapPtr)[idx].value;
-    if (val.type == RVALUE_STRUCT && val.structInst != NULL) {
+    if (val.type == RVALUE_STRUCT && val.structInst != nullptr) {
         RValue objType = VM_structGetVariableByVarName(ctx, val.structInst, "ObjType", -1);
         if (objType.type != RVALUE_UNDEFINED) {
-            return RValue_makeBool(RValue_toInt32(objType) == 1); // Map type
+            return RValue_makeBool(RValue_toInt32(objType) == DS_TYPE_MAP);
         }
     }
     return RValue_makeBool(false);
@@ -4219,10 +4219,10 @@ static RValue builtin_ds_map_is_list(VMContext* ctx, RValue* args, int32_t argCo
     if (0 > idx) return RValue_makeBool(false);
 
     RValue val = (*mapPtr)[idx].value;
-    if (val.type == RVALUE_STRUCT && val.structInst != NULL) {
+    if (val.type == RVALUE_STRUCT && val.structInst != nullptr) {
         RValue objType = VM_structGetVariableByVarName(ctx, val.structInst, "ObjType", -1);
         if (objType.type != RVALUE_UNDEFINED) {
-            return RValue_makeBool(RValue_toInt32(objType) == 2); // List type
+            return RValue_makeBool(RValue_toInt32(objType) == DS_TYPE_LIST);
         }
     }
     return RValue_makeBool(false);
@@ -4320,7 +4320,7 @@ static RValue builtin_ds_map_find_value(VMContext* ctx, RValue* args, int32_t ar
     if (0 > idx) return RValue_makeUndefined();
     RValue val = (*mapPtr)[idx].value;
 
-    if (val.type == RVALUE_STRUCT && val.structInst != NULL) {
+    if (val.type == RVALUE_STRUCT && val.structInst != nullptr) {
         RValue objectVal = VM_structGetVariableByVarName(ctx, val.structInst, "Object", -1);
         if (objectVal.type != RVALUE_UNDEFINED) {
             RValue result = RValue_makeIndependent(objectVal);
@@ -9310,18 +9310,18 @@ static RValue builtin_filename_name(MAYBE_UNUSED VMContext* ctx, RValue* args, i
     if (1 > argCount) return RValue_makeOwnedString(safeStrdup(""));
 
     char* fname = RValue_toString(args[0]);
-    if (fname == NULL) return RValue_makeOwnedString(safeStrdup(""));
+    if (fname == nullptr) return RValue_makeOwnedString(safeStrdup(""));
 
     char* lastBackslash = strrchr(fname, '\\');
     char* lastSlash = strrchr(fname, '/');
     char* last = lastBackslash > lastSlash ? lastBackslash : lastSlash;
 
     char* result;
-    if (last != NULL) {
+    if (last != nullptr) {
         result = safeStrdup(last + 1);
     } else {
         result = fname;
-        fname = NULL;
+        fname = nullptr;
     }
 
     free(fname);
@@ -14668,7 +14668,7 @@ static RValue builtin_json_encode(VMContext* ctx, RValue* args, int32_t argCount
 
 // Recursively decode a JSON value into a GML value
 static RValue jsonDecodeValue(VMContext* ctx, JsonValue* json) {
-    if (json == NULL) return RValue_makeUndefined();
+    if (json == nullptr) return RValue_makeUndefined();
 
     switch (json->type) {
         case JSON_NULL:
@@ -14683,7 +14683,7 @@ static RValue jsonDecodeValue(VMContext* ctx, JsonValue* json) {
             // For arrays, create a ds_list (matches HTML5 - _json_decode_array)
             int32_t listId = dsListCreate(ctx->runner);
             DsList* list = dsListGet(ctx->runner, listId);
-            if (list != NULL) {
+            if (list != nullptr) {
                 int len = JsonReader_arrayLength(json);
                 for (int i = 0; i < len; i++) {
                     JsonValue* item = JsonReader_getArrayElement(json, i);
@@ -14697,7 +14697,7 @@ static RValue jsonDecodeValue(VMContext* ctx, JsonValue* json) {
             // For arrays, create a ds_map (matches HTML5 - _json_decode_object)
             int32_t mapId = dsMapCreate(ctx->runner);
             DsMapEntry** mapPtr = dsMapGet(ctx->runner, mapId);
-            if (mapPtr != NULL) {
+            if (mapPtr != nullptr) {
                 int len = JsonReader_objectLength(json);
                 for (int i = 0; i < len; i++) {
                     const char* key = JsonReader_getJsonKeyByIndex(json, i);
@@ -14733,7 +14733,7 @@ static RValue builtin_json_decode(VMContext* ctx, RValue* args, int32_t argCount
     if (json == nullptr) {
         int32_t mapIndex = dsMapCreate(runner);
         DsMapEntry** mapPtr = dsMapGet(runner, mapIndex);
-        if (mapPtr != NULL) {
+        if (mapPtr != nullptr) {
             shput(*mapPtr, safeStrdup("default"), RValue_makeIndependent(args[0]));
         }
         return RValue_makeReal((GMLReal)mapIndex);
