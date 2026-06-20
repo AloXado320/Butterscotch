@@ -14745,8 +14745,6 @@ static RValue builtin_json_decode(VMContext* ctx, RValue* args, int32_t argCount
 
     // result should be a ds_map ID (from the top-level object)
     if (result.type == RVALUE_REAL || result.type == RVALUE_INT32) {
-        int32_t mapId = RValue_toInt32(result);
-        DsMapEntry** mapPtr = dsMapGet(runner, mapId);
         return result;
     }
 
