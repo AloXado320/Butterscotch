@@ -488,7 +488,6 @@ int main(int argc, char* argv[]) {
 
     PS2Overlay_drawStatusScreen(dataWin->gen8.displayName, "Creating runner...", true);
     Runner* runner = Runner_create(dataWin, vm, renderer, fileSystem, audioSystem);
-    runner->gameStartTime = nowNanos();
 
     // Parse disabledObjects from CONFIG.JSN
     JsonValue* disabledObjectsArr = JsonReader_getJsonValueByKey(configRoot, "disabledObjects");
@@ -647,16 +646,6 @@ int main(int argc, char* argv[]) {
 
         Runner_drawPre(runner, 640, 448);
         Runner_beginFrame(runner, gameW, gameH, 640, 448, 640, 448);
-
-        // Clear with room background color
-        if (runner->drawBackgroundColor) {
-            uint8_t bgR = BGR_R(runner->backgroundColor);
-            uint8_t bgG = BGR_G(runner->backgroundColor);
-            uint8_t bgB = BGR_B(runner->backgroundColor);
-            // Force opaque for the background to avoid PrimAlphaEnable causing issues.
-            u64 bgColor = GS_SETREG_RGBAQ(bgR, bgG, bgB, 0x80, 0x00);
-            gsKit_prim_sprite(gsGlobal, 0, 0, 640, 448, 0, bgColor);
-        }
 
         // Render views
         u64 drawStartTime = GetTimerSystemTime();

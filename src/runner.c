@@ -14,6 +14,7 @@
 #include "math_compat.h"
 
 #include "debug_overlay.h"
+#include "gettime.h"
 #include "stb_ds.h"
 
 // ===[ Runtime Layer Teardown Helpers ]===
@@ -1107,6 +1108,8 @@ static void applyFreeCamera(Runner* runner, int32_t* viewX, int32_t* viewY, int3
 
 void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugShowCollisionMasks) {
     Renderer* renderer = runner->renderer;
+    renderer->vtable->clearScreen(renderer, runner->drawBackgroundColor ? runner->backgroundColor : 0, 1.0f);
+
     bool anyViewRendered = false;
 
     bool viewsEnabled = runner->viewsEnabled;
@@ -1130,6 +1133,9 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
                     continue;
 
                 Runner_surfaceSetTarget(runner, view->surfaceId);
+
+                if (runner->drawBackgroundColor)
+                    renderer->vtable->clearScreen(renderer, runner->currentRoom->backgroundColor, 1.0f);
 
                 Matrix4f proj;
                 Matrix4f_viewProjection(&proj, (float) camera->viewX, (float) camera->viewY, (float) camera->viewWidth, (float) camera->viewHeight, camera->viewAngle);
@@ -2412,6 +2418,8 @@ void Runner_initFirstRoom(Runner* runner) {
     require(dataWin->gen8.roomOrderCount > 0);
 
     int32_t firstRoomIndex = dataWin->gen8.roomOrder[0];
+
+    runner->gameStartTime = nowNanos();
 
     // Run global init scripts with the global scope instance as "self"
     // In GMS 2.3+ (BC17), GLOB scripts store function declarations on "self" via Pop.v.v

@@ -300,7 +300,6 @@ int main(int argc, char* argv[]) {
     bool debugPaused = false;
     bool debugShowCollisionMasks = false;
     double lastFrameStartTime = PS3_GET_TIME; // for delta_time and frame pacing
-    runner->gameStartTime = nowNanos();
     while (!shouldExit && !runner->shouldExit) {
         // Clear last frame's pressed/released state, then poll new input events
         RunnerKeyboard_beginFrame(runner->keyboard);
@@ -401,18 +400,6 @@ int main(int argc, char* argv[]) {
         Runner_drawPre(runner, fbWidth, fbHeight);
 
         Runner_beginFrame(runner, gameW, gameH, fbWidth, fbHeight, fbWidth, fbHeight);
-
-        // Clear FBO with room background color
-        if (runner->drawBackgroundColor) {
-            int rInt = BGR_R(runner->backgroundColor);
-            int gInt = BGR_G(runner->backgroundColor);
-            int bInt = BGR_B(runner->backgroundColor);
-            int aInt = BGR_A(runner->backgroundColor);
-            glClearColor(rInt / 255.0f, gInt / 255.0f, bInt / 255.0f, aInt / 255.0f);
-        } else {
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        }
-        glClear(GL_COLOR_BUFFER_BIT);
 
         double drawStart = PS3_GET_TIME;
         Runner_drawViews(runner, gameW, gameH, debugShowCollisionMasks);
