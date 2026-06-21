@@ -14682,13 +14682,15 @@ static RValue jsonDecodeValue(VMContext* ctx, JsonValue* json) {
         case JSON_ARRAY: {
             // For arrays, create a ds_list (matches HTML5 - _json_decode_array)
             int32_t listId = dsListCreate(ctx->runner);
-            DsList* list = dsListGet(ctx->runner, listId);
-            if (list != nullptr) {
-                int len = JsonReader_arrayLength(json);
-                for (int i = 0; i < len; i++) {
-                    JsonValue* item = JsonReader_getArrayElement(json, i);
-                    RValue val = jsonDecodeValue(ctx, item);
+            int len = JsonReader_arrayLength(json);
+            for (int i = 0; i < len; i++) {
+                JsonValue* item = JsonReader_getArrayElement(json, i);
+                RValue val = jsonDecodeValue(ctx, item);
+                DsList* list = dsListGet(ctx->runner, listId);
+                if (list != NULL) {
                     arrput(list->items, val);
+                } else {
+                    RValue_free(&val);
                 }
             }
             return RValue_makeReal((GMLReal)listId);
@@ -14696,19 +14698,19 @@ static RValue jsonDecodeValue(VMContext* ctx, JsonValue* json) {
         case JSON_OBJECT: {
             // For arrays, create a ds_map (matches HTML5 - _json_decode_object)
             int32_t mapId = dsMapCreate(ctx->runner);
-            DsMapEntry** mapPtr = dsMapGet(ctx->runner, mapId);
-            if (mapPtr != nullptr) {
-                int len = JsonReader_objectLength(json);
-                for (int i = 0; i < len; i++) {
-                    const char* key = JsonReader_getJsonKeyByIndex(json, i);
-                    JsonValue* valJson = JsonReader_getJsonValueByIndex(json, i);
-                    RValue val = jsonDecodeValue(ctx, valJson);
-
-                    // Store in the map
+            int len = JsonReader_objectLength(json);
+            for (int i = 0; i < len; i++) {
+                const char* key = JsonReader_getJsonKeyByIndex(json, i);
+                JsonValue* valJson = JsonReader_getJsonValueByIndex(json, i);
+                RValue val = jsonDecodeValue(ctx, valJson);
+                DsMapEntry** mapPtr = dsMapGet(ctx->runner, mapId);
+                if (mapPtr != nullptr) {
                     char* keyCopy = safeStrdup(key);
                     RValue storedVal = RValue_makeIndependent(val);
                     RValue_free(&val);
                     shput(*mapPtr, keyCopy, storedVal);
+                } else {
+                    RValue_free(&val);
                 }
             }
             return RValue_makeReal((GMLReal)mapId);
