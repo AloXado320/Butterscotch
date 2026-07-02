@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _BS_RENDERER_H_
+#define _BS_RENDERER_H_
 
 #include "common.h"
 #include <stdint.h>
@@ -94,7 +95,7 @@ typedef struct {
     int32_t (*createSpriteFromSurface)(Renderer* renderer, int32_t surfaceID, int32_t x, int32_t y, int32_t w, int32_t h, bool removeback, bool smooth, int32_t xorig, int32_t yorig);
     void (*deleteSprite)(Renderer* renderer, int32_t spriteIndex);
     void (*gpuSetBlendMode)(Renderer* renderer, int32_t mode);
-    void (*gpuSetBlendModeExt)(Renderer* renderer, int32_t sfactor, int32_t dfactor);
+    void (*gpuSetBlendModeExt)(Renderer* renderer, int32_t sfactor, int32_t dfactor, int32_t sfactor_alpha, int32_t dfactor_alpha);
     void (*gpuSetBlendEnable)(Renderer* renderer, bool enable);
     void (*gpuSetAlphaTestEnable)(Renderer* renderer, bool enable);
     void (*gpuSetAlphaTestRef)(Renderer* renderer, uint8_t ref);
@@ -666,3 +667,5 @@ static inline void Renderer_drawCircleColor(Renderer* renderer, float cx, float 
 static inline void Renderer_drawCircle(Renderer* renderer, float cx, float cy, float radius, bool outline) {
     Renderer_drawCircleColor(renderer, cx, cy, radius, renderer->drawColor, renderer->drawColor, outline);
 }
+
+#endif /* _BS_RENDERER_H_ */

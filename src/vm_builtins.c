@@ -15,7 +15,6 @@
 #include "math_compat.h"
 #include <ctype.h>
 #include <time.h>
-#include <sys/time.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -32,7 +31,9 @@
 #include "base64.h"
 #include "gettime.h"
 
+#ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 
 #define MAX_BACKGROUNDS 8
 
@@ -1049,7 +1050,22 @@ RValue VMBuiltins_getVariable(VMContext* ctx, Instance* inst, int16_t builtinVar
             }
             return RValue_makeUndefined();
         }
-        case BUILTIN_VAR_ARGUMENT0 ... BUILTIN_VAR_ARGUMENT15: {
+        case BUILTIN_VAR_ARGUMENT0:
+        case BUILTIN_VAR_ARGUMENT1:
+        case BUILTIN_VAR_ARGUMENT2:
+        case BUILTIN_VAR_ARGUMENT3:
+        case BUILTIN_VAR_ARGUMENT4:
+        case BUILTIN_VAR_ARGUMENT5:
+        case BUILTIN_VAR_ARGUMENT6:
+        case BUILTIN_VAR_ARGUMENT7:
+        case BUILTIN_VAR_ARGUMENT8:
+        case BUILTIN_VAR_ARGUMENT9:
+        case BUILTIN_VAR_ARGUMENT10:
+        case BUILTIN_VAR_ARGUMENT11:
+        case BUILTIN_VAR_ARGUMENT12:
+        case BUILTIN_VAR_ARGUMENT13:
+        case BUILTIN_VAR_ARGUMENT14:
+        case BUILTIN_VAR_ARGUMENT15: {
             int argNumber = builtinVarId - BUILTIN_VAR_ARGUMENT0;
             if (ctx->scriptArgs != nullptr && ctx->scriptArgCount > argNumber) {
                 RValue val = ctx->scriptArgs[argNumber];
@@ -1244,7 +1260,7 @@ RValue VMBuiltins_getVariable(VMContext* ctx, Instance* inst, int16_t builtinVar
 }
 
 void VMBuiltins_setVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId, const char* name, RValue val, int32_t arrayIndex) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: setVariable called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: setVariable called but no runner!");
     requireNotNull(runner);
 
     // Structs: instance builtins are ordinary members.
@@ -1674,28 +1690,6 @@ void VMBuiltins_setVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId
             runner->currentRoom->speed = (uint32_t) RValue_toInt32(val);
             return;
 
-        // Read-only variables (silently ignore with warning)
-        case BUILTIN_VAR_OS_TYPE ... BUILTIN_VAR_OS_LLVM_WINPHONE:
-        case BUILTIN_VAR_BUFFER_FIXED ... BUILTIN_VAR_BUFFER_SEEK_END:
-        case BUILTIN_VAR_ID:
-        case BUILTIN_VAR_OBJECT_INDEX:
-        case BUILTIN_VAR_CURRENT_DAY:
-        case BUILTIN_VAR_CURRENT_HOUR:
-        case BUILTIN_VAR_CURRENT_MINUTE:
-        case BUILTIN_VAR_CURRENT_MONTH:
-        case BUILTIN_VAR_CURRENT_SECOND:
-        case BUILTIN_VAR_CURRENT_TIME:
-        case BUILTIN_VAR_CURRENT_WEEKDAY:
-        case BUILTIN_VAR_CURRENT_YEAR:
-        case BUILTIN_VAR_VIEW_CURRENT:
-        case BUILTIN_VAR_PATH_INDEX:
-        case BUILTIN_VAR_DEBUG_MODE:
-        case BUILTIN_VAR_ROOM_FIRST:
-        case BUILTIN_VAR_ROOM_LAST:
-        case BUILTIN_VAR_GP_FACE1 ... BUILTIN_VAR_GP_AXIS_RV:
-            fprintf(stderr, "VM: [%s] Attempted write to read-only built-in '%s'\n", ctx->currentCodeName, name);
-            return;
-
         // argument[N] - array-style write to script arguments
         case BUILTIN_VAR_ARGUMENT:
             if (arrayIndex >= 0) {
@@ -1704,7 +1698,22 @@ void VMBuiltins_setVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId
             return;
 
         // Argument variables (argument0..argument15)
-        case BUILTIN_VAR_ARGUMENT0 ... BUILTIN_VAR_ARGUMENT15: {
+        case BUILTIN_VAR_ARGUMENT0:
+        case BUILTIN_VAR_ARGUMENT1:
+        case BUILTIN_VAR_ARGUMENT2:
+        case BUILTIN_VAR_ARGUMENT3:
+        case BUILTIN_VAR_ARGUMENT4:
+        case BUILTIN_VAR_ARGUMENT5:
+        case BUILTIN_VAR_ARGUMENT6:
+        case BUILTIN_VAR_ARGUMENT7:
+        case BUILTIN_VAR_ARGUMENT8:
+        case BUILTIN_VAR_ARGUMENT9:
+        case BUILTIN_VAR_ARGUMENT10:
+        case BUILTIN_VAR_ARGUMENT11:
+        case BUILTIN_VAR_ARGUMENT12:
+        case BUILTIN_VAR_ARGUMENT13:
+        case BUILTIN_VAR_ARGUMENT14:
+        case BUILTIN_VAR_ARGUMENT15: {
             int argNumber = builtinVarId - BUILTIN_VAR_ARGUMENT0;
             VM_writeToScriptArgs(ctx, argNumber, val);
             return;
@@ -1720,8 +1729,30 @@ void VMBuiltins_setVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId
             Runner_setHealth(runner, RValue_toReal(val));
             return;
 
+        // Read-only variables (silently ignore with warning)
         default:
-            break;
+            if (!((builtinVarId >= BUILTIN_VAR_OS_TYPE && builtinVarId <= BUILTIN_VAR_OS_LLVM_WINPHONE) || \
+               (builtinVarId >= BUILTIN_VAR_BUFFER_FIXED && builtinVarId <= BUILTIN_VAR_BUFFER_SEEK_END) || \
+               (builtinVarId >= BUILTIN_VAR_GP_FACE1 && builtinVarId <= BUILTIN_VAR_GP_AXIS_RV)))
+                break;
+            // fall through
+        case BUILTIN_VAR_ID:
+        case BUILTIN_VAR_OBJECT_INDEX:
+        case BUILTIN_VAR_CURRENT_DAY:
+        case BUILTIN_VAR_CURRENT_HOUR:
+        case BUILTIN_VAR_CURRENT_MINUTE:
+        case BUILTIN_VAR_CURRENT_MONTH:
+        case BUILTIN_VAR_CURRENT_SECOND:
+        case BUILTIN_VAR_CURRENT_TIME:
+        case BUILTIN_VAR_CURRENT_WEEKDAY:
+        case BUILTIN_VAR_CURRENT_YEAR:
+        case BUILTIN_VAR_VIEW_CURRENT:
+        case BUILTIN_VAR_PATH_INDEX:
+        case BUILTIN_VAR_DEBUG_MODE:
+        case BUILTIN_VAR_ROOM_FIRST:
+        case BUILTIN_VAR_ROOM_LAST:
+            fprintf(stderr, "VM: [%s] Attempted write to read-only built-in '%s'\n", ctx->currentCodeName, name);
+            return;
     }
 
     fprintf(stderr, "VM: [%s] Unhandled built-in variable write '%s' (arrayIndex=%d)\n", ctx->currentCodeName, name, arrayIndex);
@@ -1762,7 +1793,7 @@ static RValue builtin_string_length(MAYBE_UNUSED VMContext* ctx, RValue* args, i
 
 // https://docs.vultr.com/clang/examples/remove-all-characters-in-a-string-except-alphabets
 void filterAlphabets(char *str) {
-    char result[strlen(str) + 1];
+    char *result = (char *)safeMalloc(strlen(str) + 1);
     int j = 0;
     for (int i = 0; str[i] != '\0'; i++) {
         if ((str[i] >= 'a' && str[i] <= 'z') || (str[i] >= 'A' && str[i] <= 'Z')) {
@@ -1771,6 +1802,7 @@ void filterAlphabets(char *str) {
     }
     result[j] = '\0';  // Null-terminate the result string
     strcpy(str, result);  // Optionally copy back to original string
+    free(result);
 }
 
 static RValue builtin_string_letters(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
@@ -1916,6 +1948,15 @@ static int compareReals(const void* a, const void* b) {
     if (lhs > rhs) return 1;
     if (rhs > lhs) return -1;
     return 0;
+}
+
+static RValue builtin_mean(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeReal(0.0);
+    GMLReal result = 0.0;
+    repeat(argCount, i) {
+        result += RValue_toReal(args[i]);
+    }
+    return RValue_makeReal(result / argCount);
 }
 
 static RValue builtin_median(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
@@ -2102,7 +2143,7 @@ static RValue builtin_string_copy(MAYBE_UNUSED VMContext* ctx, RValue* args, int
     if (byteEnd > strLen) byteEnd = strLen;
 
     int32_t nbytes = byteEnd - byteStart;
-    char* result = safeMalloc(nbytes + 1);
+    char* result = (char *)safeMalloc(nbytes + 1);
     memcpy(result, str + byteStart, (size_t) nbytes);
     result[nbytes] = '\0';
 
@@ -2131,7 +2172,7 @@ static RValue builtin_string_format(MAYBE_UNUSED VMContext* ctx, RValue* args, i
     int32_t numLen = (int32_t) strlen(numBuf);
     int32_t totalLen = leftPad + numLen;
 
-    char* result = safeMalloc(totalLen + 1);
+    char* result = (char *)safeMalloc(totalLen + 1);
     for (int32_t i = 0; leftPad > i; i++) result[i] = ' ';
     memcpy(result + leftPad, numBuf, (size_t) numLen);
     result[totalLen] = '\0';
@@ -2149,7 +2190,7 @@ static RValue builtin_string_repeat(MAYBE_UNUSED VMContext* ctx, RValue* args, i
 
     size_t strLen = strlen(str);
     size_t totalLen = strLen * (size_t) count;
-    char* result = safeMalloc(totalLen + 1);
+    char* result = (char *)safeMalloc(totalLen + 1);
     repeat(count, i) {
         memcpy(result + i * strLen, str, strLen);
     }
@@ -2180,6 +2221,19 @@ static RValue builtin_string_count(MAYBE_UNUSED VMContext* ctx, RValue* args, in
     free(substr);
     free(str);
     return RValue_makeInt32(count);
+}
+
+// Source - https://stackoverflow.com/a/15515276
+static RValue builtin_string_starts_with(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (2 > argCount) return RValue_makeInt32(0);
+    char* substr = RValue_toString(args[0]);
+    char* str = RValue_toString(args[1]);
+    
+    bool ret = (strncmp(str, substr, strlen(substr)) == 0);
+
+    free(substr);
+    free(str);
+    return RValue_makeBool(ret);
 }
 
 static RValue builtin_ord(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
@@ -2221,7 +2275,7 @@ static RValue builtin_string_pos(MAYBE_UNUSED VMContext* ctx, RValue* args, int3
 
 // Appends a copy of [start, start + len) to the array as an owned string, growing it by one slot.
 static void appendSplitSegment(GMLArray* arr, int32_t* count, const char* start, int32_t len) {
-    char* segment = safeMalloc((size_t) len + 1);
+    char* segment = (char *)safeMalloc((size_t) len + 1);
     if (len > 0) memcpy(segment, start, (size_t) len);
     segment[len] = '\0';
     GMLArray_growTo(arr, *count + 1);
@@ -2300,7 +2354,7 @@ static RValue builtin_string_char_at(MAYBE_UNUSED VMContext* ctx, RValue* args, 
     int32_t byteNext = byteStart;
     TextUtils_decodeUtf8(str, strLen, &byteNext);
     int32_t nbytes = byteNext - byteStart;
-    char* out = safeMalloc(nbytes + 1);
+    char* out = (char *)safeMalloc(nbytes + 1);
     memcpy(out, str + byteStart, (size_t) nbytes);
     out[nbytes] = '\0';
     free(str);
@@ -2344,7 +2398,7 @@ static RValue builtin_string_delete(MAYBE_UNUSED VMContext* ctx, RValue* args, i
     if (byteEnd > strLen) byteEnd = strLen;
 
     int32_t removeLen = byteEnd - byteStart;
-    char* result = safeMalloc(strLen - removeLen + 1);
+    char* result = (char *)safeMalloc(strLen - removeLen + 1);
     memcpy(result, str, (size_t) byteStart);
     memcpy(result + byteStart, str + byteEnd, (size_t) (strLen - byteEnd));
     result[strLen - removeLen] = '\0';
@@ -2366,7 +2420,7 @@ static RValue builtin_string_insert(MAYBE_UNUSED VMContext* ctx, RValue* args, i
     int32_t bytePos = TextUtils_utf8AdvanceCodepoints(str, strLen, pos);
     if (bytePos > strLen) bytePos = strLen;
 
-    char* result = safeMalloc(strLen + subLen + 1);
+    char* result = (char *)safeMalloc(strLen + subLen + 1);
     memcpy(result, str, (size_t) bytePos);
     memcpy(result + bytePos, substr, (size_t) subLen);
     memcpy(result + bytePos + subLen, str + bytePos, (size_t) (strLen - bytePos));
@@ -2402,7 +2456,7 @@ static RValue builtin_string_replace(MAYBE_UNUSED VMContext* ctx, RValue* args, 
 
     int32_t newLen = strLen - needleLen + replacementLen;
     int32_t before = (int32_t) (appearance - str);
-    char *outputString = safeMalloc(newLen + 1);
+    char *outputString = (char *)safeMalloc(newLen + 1);
 
     memcpy(outputString, str, before);
     memcpy(outputString + before, replacement, replacementLen);
@@ -2435,7 +2489,7 @@ static RValue builtin_string_replace_all(MAYBE_UNUSED VMContext* ctx, RValue* ar
 
     int32_t strLen = (int32_t) strlen(str);
     int32_t resultLen = strLen + count * (replacementLen - needleLen);
-    char* result = safeMalloc(resultLen + 1);
+    char* result = (char *)safeMalloc(resultLen + 1);
     char* out = result;
     p = str;
     const char* match;
@@ -2766,7 +2820,7 @@ static bool rvalueIsMatrix(RValue rv) {
     if (rv.type != RVALUE_ARRAY) return false;
     if (GMLArray_length1D(rv.array) != 16) return false;
     repeat (16, i) {
-        RValueType type = GMLArray_slot(rv.array, i)->type;
+        RValueType type = (RValueType)(GMLArray_slot(rv.array, i)->type);
         if (type != RVALUE_REAL && type != RVALUE_INT32 && type != RVALUE_INT64)
             return false;
     }
@@ -3229,7 +3283,7 @@ static RValue builtin_room_get_info(VMContext* ctx, RValue* args, int32_t argCou
 }
 
 static RValue builtin_room_goto_next(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_goto_next called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_goto_next called but no runner!");
 
     int32_t nextPos = runner->currentRoomOrderPosition + 1;
     if ((int32_t) runner->dataWin->gen8.roomOrderCount > nextPos) {
@@ -3241,7 +3295,7 @@ static RValue builtin_room_goto_next(VMContext* ctx, MAYBE_UNUSED RValue* args, 
 }
 
 static RValue builtin_room_goto_previous(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_goto_previous called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_goto_previous called but no runner!");
 
     int32_t previousPos = runner->currentRoomOrderPosition - 1;
     if (previousPos >= 0) {
@@ -3254,19 +3308,19 @@ static RValue builtin_room_goto_previous(VMContext* ctx, MAYBE_UNUSED RValue* ar
 
 static RValue builtin_room_goto(VMContext* ctx, RValue* args, int32_t argCount) {
     if (1 > argCount) return RValue_makeUndefined();
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_goto called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_goto called but no runner!");
     runner->pendingRoom = RValue_toInt32(args[0]);
     return RValue_makeUndefined();
 }
 
 static RValue builtin_room_restart(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_restart called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_restart called but no runner!");
     runner->pendingRoom = runner->currentRoomIndex;
     return RValue_makeUndefined();
 }
 
 static RValue builtin_room_next(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_next called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_next called but no runner!");
     int32_t roomId = RValue_toInt32(args[0]);
     DataWin* dw = runner->dataWin;
     repeat(dw->gen8.roomOrderCount, i) {
@@ -3278,7 +3332,7 @@ static RValue builtin_room_next(VMContext* ctx, RValue* args, MAYBE_UNUSED int32
 }
 
 static RValue builtin_room_previous(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: room_previous called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: room_previous called but no runner!");
     int32_t roomId = RValue_toInt32(args[0]);
     DataWin* dw = runner->dataWin;
     repeat(dw->gen8.roomOrderCount, i) {
@@ -3923,7 +3977,7 @@ static RValue builtin_struct_get_names(VMContext* ctx, RValue* args, int32_t arg
                 char* name = VM_getVariableNameByVarId(ctx, entryOnTheVarStruct.key);
 
                 // We don't need to worry about making it owned because the name is owned by the Runner itself
-                GMLArray_add(array, RValue_makeString(requireNotNullMessage(name, "Trying to set a variable that we do not know the name of! Bug?")));
+                GMLArray_add(array, RValue_makeString((const char *)requireNotNullMessage(name, "Trying to set a variable that we do not know the name of! Bug?")));
             }
         }
     }
@@ -3960,7 +4014,7 @@ static RValue builtin_method(VMContext* ctx, MAYBE_UNUSED RValue* args, int32_t 
         }
 
         if (instanceToBeBound == INSTANCE_SELF) {
-            instanceToBeBound = requireNotNullMessage(ctx->currentInstance, "Trying to bind method to INSTANCE_SELF while there isn't a instance in the current context!")->instanceId;
+            instanceToBeBound = ((Instance *)requireNotNullMessage(ctx->currentInstance, "Trying to bind method to INSTANCE_SELF while there isn't a instance in the current context!"))->instanceId;
         }
 
         return RValue_makeMethodFromCodeIndexAndInstanceId(codeIndex, instanceToBeBound);
@@ -4052,7 +4106,7 @@ static RValue builtin_os_get_region(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RV
     return RValue_makeOwnedString(safeStrdup("US"));
 }
 
-STUB_RETURN_FALSE(os_is_paused);
+STUB_RETURN_FALSE(os_is_paused)
 
 // ===[ XBOX ONE FUNCTIONS ]===
 
@@ -4065,13 +4119,13 @@ static RValue builtin_xboxone_show_account_picker(MAYBE_UNUSED VMContext* ctx, R
     return RValue_makeReal((GMLReal) asyncId);
 }
 
-STUB_RETURN_TRUE(xboxone_user_is_signed_in);
-STUB_RETURN_FALSE(xboxone_is_suspending);
-STUB_RETURN_FALSE(xboxone_is_constrained);
-STUB_RETURN_ZERO(xboxone_suspend);
-STUB_RETURN_ZERO(xboxone_set_savedata_user);
-STUB_RETURN_ZERO(xboxone_stats_add_user);
-STUB_RETURN_ZERO(xboxone_achievements_set_progress);
+STUB_RETURN_TRUE(xboxone_user_is_signed_in)
+STUB_RETURN_FALSE(xboxone_is_suspending)
+STUB_RETURN_FALSE(xboxone_is_constrained)
+STUB_RETURN_ZERO(xboxone_suspend)
+STUB_RETURN_ZERO(xboxone_set_savedata_user)
+STUB_RETURN_ZERO(xboxone_stats_add_user)
+STUB_RETURN_ZERO(xboxone_achievements_set_progress)
 
 static RValue builtin_environment_get_variable(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
     char* name = RValue_toString(args[0]);
@@ -4648,7 +4702,7 @@ static RValue dsStreamReadValue(int32_t wadVersion, DsReadStream* s, int32_t ver
         case DS_STREAM_VALUE_STRING: {
             int32_t len = dsStreamReadS32(s);
             if (s->error || 0 > len || s->pos + len > s->size) { s->error = true; return RValue_makeUndefined(); }
-            char* str = safeMalloc((size_t) len + 1);
+            char* str = (char *)safeMalloc((size_t) len + 1);
             if (len > 0) memcpy(str, s->data + s->pos, (size_t) len);
             str[len] = '\0';
             s->pos += len;
@@ -4712,7 +4766,7 @@ static RValue builtin_ds_list_read(VMContext* ctx, RValue* args, MAYBE_UNUSED in
     if (2 > hexLen || (hexLen & 1) != 0) return RValue_makeBool(false);
 
     int32_t byteLen = hexLen / 2;
-    uint8_t* bytes = safeMalloc((size_t) byteLen);
+    uint8_t* bytes = (uint8_t *)safeMalloc((size_t) byteLen);
     repeat(byteLen, i) {
         int hi = dsHexNibble(hex[i * 2]);
         int lo = dsHexNibble(hex[i * 2 + 1]);
@@ -4838,7 +4892,7 @@ static void dsStreamAppendValues(uint8_t** buf, const RValue* items, int32_t len
 // Consumes "buf" (stb_ds array): hex-encodes it, frees it, and returns the hex as an owned-string RValue.
 static RValue dsStreamFinishToHexString(uint8_t* buf) {
     int32_t byteLen = (int32_t) arrlen(buf);
-    char* hex = safeMalloc((size_t) byteLen * 2 + 1);
+    char* hex = (char *)safeMalloc((size_t) byteLen * 2 + 1);
     static const char HEX_CHARS[] = "0123456789ABCDEF";
     repeat(byteLen, i) {
         hex[i * 2] = HEX_CHARS[(buf[i] >> 4) & 0xF];
@@ -4901,7 +4955,7 @@ static RValue builtin_ds_grid_create(VMContext* ctx, MAYBE_UNUSED RValue* args, 
             runner->dsGridPool[i].freed = false;
             runner->dsGridPool[i].width = width;
             runner->dsGridPool[i].height = height;
-            runner->dsGridPool[i].items = count > 0 ? safeCalloc(count, sizeof(RValue)) : nullptr;
+            runner->dsGridPool[i].items = count > 0 ? (RValue *)safeCalloc(count, sizeof(RValue)) : nullptr;
             return RValue_makeReal(i);
         }
     }
@@ -4909,7 +4963,7 @@ static RValue builtin_ds_grid_create(VMContext* ctx, MAYBE_UNUSED RValue* args, 
     DsGrid newGrid = {0};
     newGrid.width = width;
     newGrid.height = height;
-    newGrid.items = count > 0 ? safeCalloc(count, sizeof(RValue)) : nullptr;
+    newGrid.items = count > 0 ? (RValue *)safeCalloc(count, sizeof(RValue)) : nullptr;
     int32_t id = poolSize;
     arrput(runner->dsGridPool, newGrid);
     return RValue_makeReal(id);
@@ -4994,11 +5048,11 @@ static RValue builtin_ds_grid_add(VMContext* ctx, MAYBE_UNUSED RValue* args, MAY
     RValue* slot = &grid->items[x + (y * grid->width)];
     if (slot->type == RVALUE_STRING && args[3].type == RVALUE_STRING) {
         // If they are both strings, then we concatenate them
-        const char* sa = requireNotNull(slot->string);
-        const char* sb = requireNotNull(args[3].string);
+        const char* sa = (const char *)requireNotNull(slot->string);
+        const char* sb = (const char *)requireNotNull(args[3].string);
         size_t lenA = strlen(sa);
         size_t lenB = strlen(sb);
-        char* result = safeMalloc(lenA + lenB + 1);
+        char* result = (char *)safeMalloc(lenA + lenB + 1);
         memcpy(result, sa, lenA);
         memcpy(result + lenA, sb, lenB + 1);
         RValue_free(slot);
@@ -5023,7 +5077,7 @@ static RValue builtin_ds_grid_resize(VMContext* ctx, MAYBE_UNUSED RValue* args, 
     if (0 > height) height = 0;
 
     size_t count = (size_t) width * (size_t) height;
-    RValue* newGrid = count > 0 ? safeCalloc(count, sizeof(RValue)) : nullptr;
+    RValue* newGrid = count > 0 ? (RValue *)safeCalloc(count, sizeof(RValue)) : nullptr;
 
     int32_t copyWidth = width > grid->width ? grid->width : width;
     int32_t copyHeight = height > grid->height ? grid->height : height;
@@ -5171,7 +5225,7 @@ static RValue builtin_ds_stack_read(VMContext* ctx, RValue* args, MAYBE_UNUSED i
     if (2 > hexLen || (hexLen & 1) != 0) return RValue_makeBool(false);
 
     int32_t byteLen = hexLen / 2;
-    uint8_t* bytes = safeMalloc((size_t) byteLen);
+    uint8_t* bytes = (uint8_t *)safeMalloc((size_t) byteLen);
     repeat(byteLen, i) {
         int hi = dsHexNibble(hex[i * 2]);
         int lo = dsHexNibble(hex[i * 2 + 1]);
@@ -5349,7 +5403,7 @@ static RValue builtin_ds_queue_read(VMContext* ctx, RValue* args, MAYBE_UNUSED i
     if (2 > hexLen || (hexLen & 1) != 0) return RValue_makeBool(false);
 
     int32_t byteLen = hexLen / 2;
-    uint8_t* bytes = safeMalloc((size_t) byteLen);
+    uint8_t* bytes = (uint8_t *)safeMalloc((size_t) byteLen);
     repeat(byteLen, i) {
         int hi = dsHexNibble(hex[i * 2]);
         int lo = dsHexNibble(hex[i * 2 + 1]);
@@ -7096,7 +7150,7 @@ static RValue builtin_file_text_read_string(VMContext* ctx, RValue* args, int32_
     }
 
     int32_t len = file->readPos - start;
-    char* result = safeMalloc((size_t) len + 1);
+    char* result = (char *)safeMalloc((size_t) len + 1);
     memcpy(result, file->content + start, (size_t) len);
     result[len] = '\0';
     return RValue_makeOwnedString(result);
@@ -7131,7 +7185,7 @@ static RValue builtin_file_text_readln(VMContext* ctx, RValue* args, int32_t arg
     }
 
     // Now we copy it because we already know the size of the string!
-    char* string = safeMalloc(size + 1); // +1 because the last one is null
+    char* string = (char *)safeMalloc(size + 1); // +1 because the last one is null
     memcpy(string, file->content + file->readPos, size);
     string[size] = '\0';
     file->readPos = readPos;
@@ -7169,7 +7223,7 @@ static RValue builtin_file_text_write_string(VMContext* ctx, RValue* args, int32
     char* str = RValue_toString(args[1]);
     size_t oldLen = strlen(file->writeBuffer);
     size_t addLen = strlen(str);
-    file->writeBuffer = safeRealloc(file->writeBuffer, oldLen + addLen + 1);
+    file->writeBuffer = (char *)safeRealloc(file->writeBuffer, oldLen + addLen + 1);
     memcpy(file->writeBuffer + oldLen, str, addLen);
     file->writeBuffer[oldLen + addLen] = '\0';
     free(str);
@@ -7187,7 +7241,7 @@ static RValue builtin_file_text_writeln(VMContext* ctx, RValue* args, int32_t ar
     if (!file->isWriteMode) return RValue_makeUndefined();
 
     size_t oldLen = strlen(file->writeBuffer);
-    file->writeBuffer = safeRealloc(file->writeBuffer, oldLen + 2);
+    file->writeBuffer = (char *)safeRealloc(file->writeBuffer, oldLen + 2);
     file->writeBuffer[oldLen] = '\n';
     file->writeBuffer[oldLen + 1] = '\0';
 
@@ -7206,7 +7260,7 @@ static RValue builtin_file_text_write_real(VMContext* ctx, RValue* args, int32_t
     char* str = RValue_toString(args[1]);
     size_t oldLen = strlen(file->writeBuffer);
     size_t addLen = strlen(str);
-    file->writeBuffer = safeRealloc(file->writeBuffer, oldLen + addLen + 1);
+    file->writeBuffer = (char *)safeRealloc(file->writeBuffer, oldLen + addLen + 1);
     memcpy(file->writeBuffer + oldLen, str, addLen);
     file->writeBuffer[oldLen + addLen] = '\0';
     free(str);
@@ -7729,7 +7783,7 @@ static RValue builtin_window_set_caption(VMContext* ctx, MAYBE_UNUSED RValue* ar
     bool changed = runner->windowTitle == nullptr || strcmp(runner->windowTitle, val) != 0;
     if (changed) {
         free(runner->windowTitle);
-        runner->windowTitle = strdup(val);
+        runner->windowTitle = safeStrdup(val);
         if (runner->setWindowTitle) {
             runner->setWindowTitle(val);
             printf("Runner: Window title set to: %s\n", val);
@@ -7742,7 +7796,7 @@ static RValue builtin_window_set_caption(VMContext* ctx, MAYBE_UNUSED RValue* ar
 
 static RValue builtin_window_get_caption(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
-    return RValue_makeOwnedString(strdup(runner->windowTitle ? runner->windowTitle : ""));
+    return RValue_makeOwnedString(safeStrdup(runner->windowTitle ? runner->windowTitle : ""));
 }
 
 static RValue builtin_window_has_focus(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
@@ -7949,7 +8003,7 @@ static RValue builtin_instance_create_layer(VMContext* ctx, RValue* args, int32_
                     variableInstanceSetOn(
                         ctx,
                         inst,
-                        requireNotNullMessage(name, "Trying to set a variable that we do not know the name of! Bug?"),
+                        (const char *)requireNotNullMessage(name, "Trying to set a variable that we do not know the name of! Bug?"),
                         target,
                         "instance_create_layer"
                     );
@@ -8610,7 +8664,7 @@ static RValue builtin_action_set_vspeed(VMContext* ctx, MAYBE_UNUSED RValue* arg
 static int32_t gmlBufferCreate(Runner* runner, int32_t size, int32_t type, int32_t alignment) {
     GmlBuffer buf = {0};
     buf.size = size > 0 ? size : 1;
-    buf.data = safeCalloc((size_t) buf.size, 1);
+    buf.data = (uint8_t *)safeCalloc((size_t) buf.size, 1);
     buf.position = 0;
     buf.usedSize = (type == GML_BUFFER_GROW) ? 0 : buf.size;
     buf.alignment = alignment > 0 ? alignment : 1;
@@ -8640,7 +8694,7 @@ static void gmlBufferEnsureSize(GmlBuffer* buf, int32_t newSize) {
     // Double or use newSize, whichever is larger
     int32_t newAlloc = buf->size * 2;
     if (newAlloc < newSize) newAlloc = newSize;
-    buf->data = safeRealloc(buf->data, (size_t) newAlloc);
+    buf->data = (uint8_t *)safeRealloc(buf->data, (size_t) newAlloc);
     memset(buf->data + buf->size, 0, (size_t) (newAlloc - buf->size));
     buf->size = newAlloc;
 }
@@ -8851,7 +8905,7 @@ static RValue builtin_buffer_read(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
                 buf->position++;
             }
             int32_t len = buf->position - start;
-            char* str = safeMalloc((size_t) len + 1);
+            char* str = (char *)safeMalloc((size_t) len + 1);
             memcpy(str, buf->data + start, (size_t) len);
             str[len] = '\0';
             // Skip past the null terminator
@@ -8864,7 +8918,7 @@ static RValue builtin_buffer_read(MAYBE_UNUSED VMContext* ctx, RValue* args, MAY
             int32_t start = buf->position;
             int32_t len = buf->size - start;
             if (0 > len) len = 0;
-            char* str = safeMalloc((size_t) len + 1);
+            char* str = (char *)safeMalloc((size_t) len + 1);
             if (len > 0) memcpy(str, buf->data + start, (size_t) len);
             str[len] = '\0';
             buf->position = buf->size;
@@ -8999,7 +9053,7 @@ static RValue builtin_buffer_save_ext(MAYBE_UNUSED VMContext* ctx, RValue* args,
 static char* gmlAsyncBufferResolvePath(const char* groupName, const char* filename) {
     if (groupName == nullptr || groupName[0] == '\0') return safeStrdup(filename);
     size_t length = strlen(groupName) + 1 + strlen(filename) + 1;
-    char* path = safeMalloc(length);
+    char* path = (char *)safeMalloc(length);
     snprintf(path, length, "%s/%s", groupName, filename);
     return path;
 }
@@ -9148,7 +9202,7 @@ static RValue builtin_buffer_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* 
         size = (size_t)(maxBoundary - offset);
     }
 
-    char* out = safeMalloc(BASE64_ENCODE_OUT_SIZE(size));
+    char* out = (char *)safeMalloc(BASE64_ENCODE_OUT_SIZE(size));
     base64_encode((const unsigned char*) buf->data + offset, size, out);
     return RValue_makeOwnedString(out);
 }
@@ -9159,7 +9213,7 @@ static RValue builtin_buffer_base64_decode(MAYBE_UNUSED VMContext* ctx, RValue* 
     char* input = RValue_toString(args[1]);
     unsigned int inLen = (unsigned int) strlen(input);
     size_t outLen = BASE64_DECODE_OUT_SIZE(inLen);
-    uint8_t* out = safeMalloc(outLen);
+    uint8_t* out = (uint8_t *)safeMalloc(outLen);
     base64_decode(input, inLen, out);
     free(input);
     int32_t id = gmlBufferCreate(runner, outLen, GML_BUFFER_GROW, 1);
@@ -9175,7 +9229,7 @@ static RValue builtin_base64_encode(MAYBE_UNUSED VMContext* ctx, RValue* args, M
     if (1 > argCount) return RValue_makeOwnedString(safeStrdup(""));
     char* input = RValue_toString(args[0]);
     unsigned int inLen = (unsigned int) strlen(input);
-    char* out = safeMalloc(BASE64_ENCODE_OUT_SIZE(inLen));
+    char* out = (char *)safeMalloc(BASE64_ENCODE_OUT_SIZE(inLen));
     base64_encode((const unsigned char*) input, inLen, out);
     free(input);
     return RValue_makeOwnedString(out);
@@ -9186,7 +9240,7 @@ static RValue builtin_base64_decode(MAYBE_UNUSED VMContext* ctx, RValue* args, M
     char* input = RValue_toString(args[0]);
     unsigned int inLen = (unsigned int) strlen(input);
     unsigned int outCap = BASE64_DECODE_OUT_SIZE(inLen);
-    unsigned char* out = safeMalloc(outCap + 1);
+    unsigned char* out = (unsigned char *)safeMalloc(outCap + 1);
     unsigned int outLen = base64_decode(input, inLen, out);
     out[outLen] = '\0';
     free(input);
@@ -9196,7 +9250,7 @@ static RValue builtin_base64_decode(MAYBE_UNUSED VMContext* ctx, RValue* args, M
 // Converts the "digest" to a hex string
 static char* convertToHexString(unsigned char* digest, int32_t digestLength) {
     int32_t stringLength = digestLength * 2;
-    char* hex = safeMalloc(stringLength + 1);
+    char* hex = (char *)safeMalloc(stringLength + 1);
     for (int32_t i = 0; digestLength > i; i++) {
         sprintf(&hex[i * 2], "%02x", digest[i]);
     }
@@ -9828,10 +9882,10 @@ static RValue builtin_draw_text_color(VMContext* ctx, RValue* args, MAYBE_UNUSED
     float x = (float) RValue_toReal(args[0]);
     float y = (float) RValue_toReal(args[1]);
     char* str = RValue_toString(args[2]);
-    int32_t c1 = (float) RValue_toInt32(args[3]);
-    int32_t c2 = (float) RValue_toInt32(args[4]);
-    int32_t c3 = (float) RValue_toInt32(args[5]);
-    int32_t c4 = (float) RValue_toInt32(args[6]);
+    int32_t c1 = RValue_toInt32(args[3]);
+    int32_t c2 = RValue_toInt32(args[4]);
+    int32_t c3 = RValue_toInt32(args[5]);
+    int32_t c4 = RValue_toInt32(args[6]);
     float alpha = (float) RValue_toReal(args[7]);
 
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
@@ -9851,10 +9905,10 @@ static RValue builtin_draw_text_color_transformed(VMContext* ctx, RValue* args, 
     float xscale = (float) RValue_toReal(args[3]);
     float yscale = (float) RValue_toReal(args[4]);
     float angle = (float) RValue_toReal(args[5]);
-    int32_t c1 = (float) RValue_toInt32(args[6]);
-    int32_t c2 = (float) RValue_toInt32(args[7]);
-    int32_t c3 = (float) RValue_toInt32(args[8]);
-    int32_t c4 = (float) RValue_toInt32(args[9]);
+    int32_t c1 = RValue_toInt32(args[6]);
+    int32_t c2 = RValue_toInt32(args[7]);
+    int32_t c3 = RValue_toInt32(args[8]);
+    int32_t c4 = RValue_toInt32(args[9]);
     float alpha = (float) RValue_toReal(args[10]);
 
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
@@ -9886,10 +9940,10 @@ static RValue builtin_draw_text_color_ext(VMContext* ctx, RValue* args, MAYBE_UN
     char* str = RValue_toString(args[2]);
     int32_t separation = RValue_toInt32(args[3]);
     int32_t width = RValue_toInt32(args[4]);
-    int32_t c1 = (float) RValue_toInt32(args[5]);
-    int32_t c2 = (float) RValue_toInt32(args[6]);
-    int32_t c3 = (float) RValue_toInt32(args[7]);
-    int32_t c4 = (float) RValue_toInt32(args[8]);
+    int32_t c1 = RValue_toInt32(args[5]);
+    int32_t c2 = RValue_toInt32(args[6]);
+    int32_t c3 = RValue_toInt32(args[7]);
+    int32_t c4 = RValue_toInt32(args[8]);
     float alpha = (float) RValue_toReal(args[9]);
 
     drawTextColorExtCommon(runner, str, x, y, 1.0f, 1.0f, 0.0f, separation, width, c1, c2, c3, c4, alpha);
@@ -9909,10 +9963,10 @@ static RValue builtin_draw_text_color_ext_transformed(VMContext* ctx, RValue* ar
     float xscale = (float) RValue_toReal(args[5]);
     float yscale = (float) RValue_toReal(args[6]);
     float angle = (float) RValue_toReal(args[7]);
-    int32_t c1 = (float) RValue_toInt32(args[8]);
-    int32_t c2 = (float) RValue_toInt32(args[9]);
-    int32_t c3 = (float) RValue_toInt32(args[10]);
-    int32_t c4 = (float) RValue_toInt32(args[11]);
+    int32_t c1 = RValue_toInt32(args[8]);
+    int32_t c2 = RValue_toInt32(args[9]);
+    int32_t c3 = RValue_toInt32(args[10]);
+    int32_t c4 = RValue_toInt32(args[11]);
     float alpha = (float) RValue_toReal(args[12]);
 
     drawTextColorExtCommon(runner, str, x, y, xscale, yscale, angle, separation, width, c1, c2, c3, c4, alpha);
@@ -12175,21 +12229,21 @@ static RValue builtin_action_message(MAYBE_UNUSED VMContext* ctx, RValue* args, 
 
 // action_another_room(room_id) - jumps to the given room.
 static RValue builtin_action_another_room(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: action_another_room called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: action_another_room called but no runner!");
     runner->pendingRoom = RValue_toInt32(args[0]);
     return RValue_makeUndefined();
 }
 
 // action_current_room() -  restarts the current room.
 static RValue builtin_action_current_room(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: action_current_room called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: action_current_room called but no runner!");
     runner->pendingRoom = runner->currentRoomIndex;
     return RValue_makeUndefined();
 }
 
 // action_next_room() - goes to the next room in the room order.
 static RValue builtin_action_next_room(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Runner* runner = requireNotNullMessage(ctx->runner, "VM: action_next_room called but no runner!");
+    Runner* runner = (Runner *)requireNotNullMessage(ctx->runner, "VM: action_next_room called but no runner!");
     int32_t nextPos = runner->currentRoomOrderPosition + 1;
     if ((int32_t) runner->dataWin->gen8.roomOrderCount > nextPos) {
         runner->pendingRoom = runner->dataWin->gen8.roomOrder[nextPos];
@@ -12345,7 +12399,7 @@ static RValue builtin_tile_add(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_
 
     uint32_t newId = runner->nextInstanceId++;
     uint32_t newCount = room->tileCount + 1;
-    room->tiles = safeRealloc(room->tiles, newCount * sizeof(RoomTile));
+    room->tiles = (RoomTile *)safeRealloc(room->tiles, newCount * sizeof(RoomTile));
     RoomTile* tile = &room->tiles[room->tileCount];
     tile->x = RValue_toInt32(args[5]);
     tile->y = RValue_toInt32(args[6]);
@@ -12745,7 +12799,7 @@ static RValue builtin_layer_create(VMContext* ctx, RValue* args, int32_t argCoun
         name = RValue_toString(args[1]);
     } else {
         // Technically could be smaller, but let's be safe
-        char* generatedName = safeMalloc(16);
+        char* generatedName = (char *)safeMalloc(16);
         snprintf(generatedName, 16, "_layer_%x", id);
         name = generatedName;
     }
@@ -12789,7 +12843,7 @@ static RValue builtin_layer_background_create(VMContext* ctx, RValue* args, MAYB
     if (runtimeLayer == nullptr)
         return RValue_makeReal(-1.0);
 
-    RuntimeBackgroundElement* bg = safeMalloc(sizeof(RuntimeBackgroundElement));
+    RuntimeBackgroundElement* bg = (RuntimeBackgroundElement *)safeMalloc(sizeof(RuntimeBackgroundElement));
     bg->spriteIndex = spriteIndex;
     bg->visible = true;
     bg->hTiled = false;
@@ -12862,6 +12916,17 @@ static RValue builtin_layer_background_visible(VMContext* ctx, RValue* args, MAY
     int32_t id = RValue_toInt32(args[0]);
     bool visible = RValue_toBool(args[1]);
     setBackgroundLayerField(id, visible, visible);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_layer_background_speed(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t id = RValue_toInt32(args[0]);
+    bool speed = RValue_toBool(args[1]);
+    RuntimeLayer* owner = nullptr;
+    Runner_findLayerElementById(runner, id, &owner);
+    owner->hSpeed = speed;
+    owner->vSpeed = speed;
     return RValue_makeUndefined();
 }
 
@@ -13090,6 +13155,27 @@ static RValue builtin_layer_get_element_type(VMContext* ctx, RValue* args, MAYBE
     return RValue_makeReal((GMLReal) el->type);
 }
 
+static RValue builtin_layer_element_move(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t elementId = RValue_toInt32(args[0]);
+    int32_t layerId = resolveLayerIdArg(runner, args[1]);
+    RuntimeLayer* rl = Runner_findRuntimeLayerById(runner, layerId);
+    RuntimeLayer* oldRl = nullptr;
+    RuntimeLayerElement* el = Runner_findLayerElementById(runner, elementId, &oldRl);
+
+    arrput(rl->elements, *el);
+
+    size_t count = arrlenu(oldRl->elements);
+    repeat(count, i) {
+        if (&oldRl->elements[i] == el) {
+            arrdel(oldRl->elements, i);
+            break;
+        }
+    }
+    
+    return RValue_makeUndefined();
+}
+
 static RValue builtin_layer_tile_visible(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     int32_t id = RValue_toInt32(args[0]);
@@ -13220,6 +13306,24 @@ static RValue builtin_layer_sprite_get_speed(VMContext* ctx, RValue* args, MAYBE
     if (!isValidLayerSpriteElement(el))
         return RValue_makeReal(0.0);
     return RValue_makeReal((GMLReal) el->spriteElement->animationSpeed);
+}
+
+static RValue builtin_layer_sprite_speed(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t id = RValue_toInt32(args[0]);
+    RuntimeLayerElement* el = Runner_findLayerElementById(runner, id, nullptr);
+    if (isValidLayerSpriteElement(el))
+        el->spriteElement->animationSpeed = RValue_toReal(args[1]);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_layer_sprite_blend(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    int32_t id = RValue_toInt32(args[0]);
+    RuntimeLayerElement* el = Runner_findLayerElementById(runner, id, nullptr);
+    if (isValidLayerSpriteElement(el))
+        el->blend = RValue_toBool(args[1]);
+    return RValue_makeUndefined();
 }
 
 static RValue builtin_layer_sprite_get_index(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
@@ -13359,6 +13463,52 @@ static RValue builtin_tilemap_get_y(VMContext* ctx, RValue* args, MAYBE_UNUSED i
     if (findTilemapData(runner, RValue_toInt32(args[0]), &runtimeLayer) == nullptr || runtimeLayer == nullptr)
         return RValue_makeReal(-1.0);
     return RValue_makeReal((GMLReal) runtimeLayer->yOffset);
+}
+
+static RValue builtin_tilemap_get_width(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+
+	RuntimeLayer* runtimeLayer;
+    RoomLayerTilesData* data = findTilemapData(runner, RValue_toInt32(args[0]), &runtimeLayer);
+    if (!data) return RValue_makeUndefined();
+
+    return RValue_makeReal(data->tilesX);
+}
+
+static RValue builtin_tilemap_get_height(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+
+	RuntimeLayer* runtimeLayer;
+    RoomLayerTilesData* data = findTilemapData(runner, RValue_toInt32(args[0]), &runtimeLayer);
+    if (!data) return RValue_makeUndefined();
+
+    return RValue_makeReal(data->tilesY);
+}
+
+static RValue builtin_tilemap_get_tile_width(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+
+	RuntimeLayer* runtimeLayer;
+    RoomLayerTilesData* data = findTilemapData(runner, RValue_toInt32(args[0]), &runtimeLayer);
+	if (!data) return RValue_makeUndefined();
+
+	Background* tileset = &runner->dataWin->bgnd.backgrounds[data->backgroundIndex];
+	return RValue_makeReal(tileset->gms2TileWidth);
+}
+
+static RValue builtin_tilemap_get_tile_height(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+
+	RuntimeLayer* runtimeLayer;
+    RoomLayerTilesData* data = findTilemapData(runner, RValue_toInt32(args[0]), &runtimeLayer);
+	if (!data) return RValue_makeUndefined();
+
+	Background* tileset = &runner->dataWin->bgnd.backgrounds[data->backgroundIndex];
+	return RValue_makeReal(tileset->gms2TileHeight);
 }
 
 static void coerceTileCellsToTilemapBounds(RoomLayerTilesData* data, int32_t* cellX, int32_t* cellY) {
@@ -13574,7 +13724,7 @@ static RValue builtin_array_create(VMContext* ctx, RValue* args, int32_t argCoun
 // @@This@@ - GMS2 internal function returning the current instance's ID.
 // Emitted by the GMS2 compiler for expressions like `self` when used as a value.
 static RValue builtin_This(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
-    Instance* instance = requireNotNullMessage(ctx->currentInstance, "Called @@This@@ while there isn't a current instance on the context!");
+    Instance* instance = (Instance *)requireNotNullMessage(ctx->currentInstance, "Called @@This@@ while there isn't a current instance on the context!");
     return RValue_makeInt32((int32_t) instance->instanceId);
 }
 
@@ -13722,7 +13872,7 @@ static RValue builtin_finish_catch(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RVa
 // @@throw@@ - throws a custom exception
 static RValue builtin_throw(VMContext* ctx, RValue* args, int32_t argCount) {
     char* message = RValue_toString(args[0]);
-    VMException* exception = safeCalloc(1, sizeof(VMException));
+    VMException* exception = (VMException *)safeCalloc(1, sizeof(VMException));
     exception->message = message;
     ctx->exception = exception;
     return RValue_makeUndefined();
@@ -14938,7 +15088,7 @@ static RValue builtin_object_is_ancestor(VMContext* ctx, RValue* args, int32_t a
     int32_t parentId = ctx->dataWin->objt.objects[id].parentId;
     if (parentId == -1) return RValue_makeBool(false);
 
-    while (parentId != -1) {
+    while (parentId >= -1) {
         if (parentId == ancestorId) return RValue_makeBool(true);
         parentId = ctx->dataWin->objt.objects[parentId].parentId;
     }
@@ -14988,7 +15138,7 @@ static RValue fontAddSpriteImpl(VMContext* ctx, int32_t spriteIndex, uint16_t* c
 
     // Allocate glyphs (+ 1 for synthetic space if needed)
     uint32_t totalGlyphs = hasSpace ? glyphCount : glyphCount + 1;
-    FontGlyph* glyphs = safeMalloc(totalGlyphs * sizeof(FontGlyph));
+    FontGlyph* glyphs = (FontGlyph *)safeMalloc(totalGlyphs * sizeof(FontGlyph));
 
     repeat(glyphCount, i) {
         int32_t tpagIdx = sprite->tpagIndices[i];
@@ -15038,7 +15188,7 @@ static RValue fontAddSpriteImpl(VMContext* ctx, int32_t spriteIndex, uint16_t* c
     // Grow the font array and create the new font
     uint32_t newFontIndex = dw->font.count;
     dw->font.count++;
-    dw->font.fonts = safeRealloc(dw->font.fonts, dw->font.count * sizeof(Font));
+    dw->font.fonts = (Font *)safeRealloc(dw->font.fonts, dw->font.count * sizeof(Font));
 
     Font* font = &dw->font.fonts[newFontIndex];
     font->name = "sprite_font";
@@ -15193,7 +15343,16 @@ static RValue builtin_gpu_set_blendmode(VMContext* ctx, RValue* args, int32_t ar
 static RValue builtin_gpu_set_blendmode_ext(VMContext* ctx, RValue* args, int32_t argCount) {
     int sfactor = RValue_toReal(args[0]);
     int dfactor = RValue_toReal(args[1]);
-    ctx->runner->renderer->vtable->gpuSetBlendModeExt(ctx->runner->renderer, sfactor, dfactor);
+    ctx->runner->renderer->vtable->gpuSetBlendModeExt(ctx->runner->renderer, sfactor, dfactor, sfactor, dfactor);
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_gpu_set_blendmode_ext_sepalpha(VMContext* ctx, RValue* args, int32_t argCount) {
+    int sfactor = RValue_toReal(args[0]);
+    int dfactor = RValue_toReal(args[1]);
+    int sfactor_alpha = RValue_toReal(args[2]);
+    int dfactor_alpha = RValue_toReal(args[3]);
+    ctx->runner->renderer->vtable->gpuSetBlendModeExt(ctx->runner->renderer, sfactor, dfactor, sfactor_alpha, dfactor_alpha);
     return RValue_makeUndefined();
 }
 
@@ -15395,7 +15554,7 @@ static RValue builtin_shader_set_uniform_f_array(VMContext* ctx, MAYBE_UNUSED RV
     uint32_t count = GMLArray_length1D(arr);
     if (count == 0) return RValue_makeUndefined();
 
-    float* values = safeMalloc(count * sizeof(float));
+    float* values = (float *)safeMalloc(count * sizeof(float));
     for (uint32_t i = 0; i < count; i++) {
         values[i] = (float) RValue_toReal(*GMLArray_slot(arr, i));
     }
@@ -15475,6 +15634,13 @@ static RValue builtin_sprite_get_speed(VMContext* ctx, RValue* args, MAYBE_UNUSE
     return RValue_makeReal((GMLReal) ctx->dataWin->sprt.sprites[spriteIndex].gms2PlaybackSpeed);
 }
 
+static RValue builtin_sprite_get_speed_type(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+    int32_t spriteIndex = (int32_t) RValue_toReal(args[0]);
+    if (0 > spriteIndex || (uint32_t) spriteIndex >= ctx->dataWin->sprt.count)
+        return RValue_makeReal(0.0);
+    return RValue_makeReal((GMLReal) ctx->dataWin->sprt.sprites[spriteIndex].gms2PlaybackSpeedType);
+}
+
 static RValue builtin_font_get_uvs(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
     int32_t fontIndex = (int32_t) RValue_toReal(args[0]);
 
@@ -15529,6 +15695,40 @@ static RValue builtin_texture_get_uvs(VMContext* ctx, MAYBE_UNUSED RValue* args,
     return RValue_makeArray(out);
 }
 
+
+// sprite_get_info(sprite): returns a struct with the sprite information.
+static RValue builtin_sprite_get_info(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (1 > argCount) return RValue_makeUndefined();
+    int32_t spriteIndex = RValue_toInt32(args[0]);
+    if (0 > spriteIndex || (uint32_t) spriteIndex >= ctx->dataWin->sprt.count) return RValue_makeUndefined();
+    Sprite* sprite = &ctx->dataWin->sprt.sprites[spriteIndex];
+
+    Instance* ret = Runner_createStruct(ctx->runner);
+    VM_structSetAndFreeVal(ctx, ret, "width", RValue_makeReal(sprite->width), 0);
+    VM_structSetAndFreeVal(ctx, ret, "height", RValue_makeReal(sprite->height), 1);
+    VM_structSetAndFreeVal(ctx, ret, "xoffset", RValue_makeReal(sprite->originX), 2);
+    VM_structSetAndFreeVal(ctx, ret, "yoffset", RValue_makeReal(sprite->originY), 3);
+    VM_structSetAndFreeVal(ctx, ret, "transparent", RValue_makeBool(sprite->transparent), 4);
+    VM_structSetAndFreeVal(ctx, ret, "smooth", RValue_makeBool(sprite->smooth), 5);
+    VM_structSetAndFreeVal(ctx, ret, "type", RValue_makeBool(sprite->sSpriteType), 6);
+    VM_structSetAndFreeVal(ctx, ret, "bbox_left", RValue_makeReal(sprite->marginLeft), -1);
+    VM_structSetAndFreeVal(ctx, ret, "bbox_top", RValue_makeReal(sprite->marginTop), -1);
+    VM_structSetAndFreeVal(ctx, ret, "bbox_right", RValue_makeReal(sprite->marginRight), -1);
+    VM_structSetAndFreeVal(ctx, ret, "bbox_bottom", RValue_makeReal(sprite->marginBottom), -1);
+    VM_structSetAndFreeVal(ctx, ret, "name", RValue_makeString(sprite->name), -1);
+    VM_structSetAndFreeVal(ctx, ret, "num_subimages", RValue_makeReal(sprite->textureCount), -1);
+    VM_structSetAndFreeVal(ctx, ret, "use_mask", RValue_makeBool(sprite->maskCount == 0), -1);
+    VM_structSetAndFreeVal(ctx, ret, "num_masks", RValue_makeReal(sprite->maskCount), -1);
+    VM_structSetAndFreeVal(ctx, ret, "rotated_bounds", RValue_makeBool(false), -1);
+    VM_structSetAndFreeVal(ctx, ret, "nineslice", RValue_makeUndefined(), -1);
+    VM_structSetAndFreeVal(ctx, ret, "messages", RValue_makeUndefined(), -1);
+    VM_structSetAndFreeVal(ctx, ret, "frame_info", RValue_makeUndefined(), -1);
+    VM_structSetAndFreeVal(ctx, ret, "frame_speed", RValue_makeReal(sprite->gms2PlaybackSpeed), -1);
+    VM_structSetAndFreeVal(ctx, ret, "frame_type", RValue_makeReal(sprite->gms2PlaybackSpeedType), -1);
+
+    return RValue_makeStructAndIncRef(ret);
+}
+
 // ===[ REGISTRATION ]===
 
 void VMBuiltins_registerAll(VMContext* ctx) {
@@ -15561,6 +15761,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "string_repeat", builtin_string_repeat);
     VM_registerBuiltin(ctx, "string_format", builtin_string_format);
     VM_registerBuiltin(ctx, "string_count", builtin_string_count);
+    VM_registerBuiltin(ctx, "string_starts_with", builtin_string_starts_with);
     VM_registerBuiltin(ctx, "ord", builtin_ord);
     VM_registerBuiltin(ctx, "chr", builtin_chr);
 
@@ -15592,6 +15793,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "sign", builtin_sign);
     VM_registerBuiltin(ctx, "max", builtin_max);
     VM_registerBuiltin(ctx, "min", builtin_min);
+    VM_registerBuiltin(ctx, "mean", builtin_mean);
     VM_registerBuiltin(ctx, "median", builtin_median);
     VM_registerBuiltin(ctx, "power", builtin_power);
     VM_registerBuiltin(ctx, "sqrt", builtin_sqrt);
@@ -16340,6 +16542,8 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "layer_sprite_get_angle", builtin_layer_sprite_get_angle);
     VM_registerBuiltin(ctx, "layer_sprite_get_alpha", builtin_layer_sprite_get_alpha);
     VM_registerBuiltin(ctx, "layer_sprite_get_blend", builtin_layer_sprite_get_blend);
+    VM_registerBuiltin(ctx, "layer_sprite_speed", builtin_layer_sprite_speed);
+    VM_registerBuiltin(ctx, "layer_sprite_blend", builtin_layer_sprite_blend);
     VM_registerBuiltin(ctx, "layer_sprite_destroy", builtin_layer_sprite_destroy);
     VM_registerBuiltin(ctx, "layer_tile_visible", builtin_layer_tile_visible);
 #if IS_WAD17_OR_HIGHER_ENABLED
@@ -16350,6 +16554,10 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "tilemap_y", builtin_tilemap_y);
     VM_registerBuiltin(ctx, "tilemap_get_x", builtin_tilemap_get_x);
     VM_registerBuiltin(ctx, "tilemap_get_y", builtin_tilemap_get_y);
+	VM_registerBuiltin(ctx, "tilemap_get_width", builtin_tilemap_get_width);
+    VM_registerBuiltin(ctx, "tilemap_get_height", builtin_tilemap_get_height);
+	VM_registerBuiltin(ctx, "tilemap_get_tile_width", builtin_tilemap_get_tile_width);
+    VM_registerBuiltin(ctx, "tilemap_get_tile_height", builtin_tilemap_get_tile_height);
     VM_registerBuiltin(ctx, "tilemap_get", builtin_tilemap_get);
     VM_registerBuiltin(ctx, "tilemap_get_at_pixel", builtin_tilemap_get_at_pixel);
     VM_registerBuiltin(ctx, "tilemap_get_tileset", builtin_tilemap_get_tileset);
@@ -16365,6 +16573,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "layer_background_create", builtin_layer_background_create);
     VM_registerBuiltin(ctx, "layer_background_exists", builtin_layer_background_exists);
     VM_registerBuiltin(ctx, "layer_background_visible", builtin_layer_background_visible);
+    VM_registerBuiltin(ctx, "layer_background_speed", builtin_layer_background_speed);
     VM_registerBuiltin(ctx, "layer_background_htiled", builtin_layer_background_htiled);
     VM_registerBuiltin(ctx, "layer_background_vtiled", builtin_layer_background_vtiled);
     VM_registerBuiltin(ctx, "layer_background_xscale", builtin_layer_background_xscale);
@@ -16387,6 +16596,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "layer_tile_get_yscale", builtin_layer_tile_get_yscale);
     VM_registerBuiltin(ctx, "layer_tile_get_region", builtin_layer_tile_get_region);
     VM_registerBuiltin(ctx, "layer_background_destroy", builtin_layer_background_destroy);
+    VM_registerBuiltin(ctx, "layer_element_move", builtin_layer_element_move);
 
     // GMS2 internal
     VM_registerBuiltin(ctx, "@@NewGMLArray@@", builtin_NewGMLArray);
@@ -16534,6 +16744,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "asset_get_index", builtin_asset_get_index);
     VM_registerBuiltin(ctx,"gpu_set_blendmode", builtin_gpu_set_blendmode);
     VM_registerBuiltin(ctx,"gpu_set_blendmode_ext", builtin_gpu_set_blendmode_ext);
+    VM_registerBuiltin(ctx,"gpu_set_blendmode_ext_sepalpha", builtin_gpu_set_blendmode_ext_sepalpha);
     VM_registerBuiltin(ctx,"gpu_set_blendenable", builtin_gpu_set_blendenable);
     VM_registerBuiltin(ctx,"gpu_get_blendenable", builtin_gpu_get_blendenable);
     VM_registerBuiltin(ctx,"gpu_set_alphatestenable", builtin_gpu_set_alphatestenable);
@@ -16568,9 +16779,11 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "sprite_get_uvs", builtin_sprite_get_uvs);
     VM_registerBuiltin(ctx, "sprite_get_texture", builtin_sprite_get_texture);
     VM_registerBuiltin(ctx, "sprite_get_speed", builtin_sprite_get_speed);
+    VM_registerBuiltin(ctx, "sprite_get_speed_type", builtin_sprite_get_speed_type);
     VM_registerBuiltin(ctx, "font_get_uvs", builtin_font_get_uvs);
     VM_registerBuiltin(ctx, "texture_get_texel_width", builtin_texture_get_texel_width);
     VM_registerBuiltin(ctx, "texture_get_texel_height", builtin_texture_get_texel_height);
     VM_registerBuiltin(ctx, "texture_get_uvs", builtin_texture_get_uvs);
     VM_registerBuiltin(ctx, "texture_set_stage", builtin_texture_set_stage);
+    VM_registerBuiltin(ctx, "sprite_get_info", builtin_sprite_get_info);
 }
