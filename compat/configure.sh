@@ -86,12 +86,6 @@ int main(void){return 0;}
     return $?
 }
 
-ccname="${CC##*/}"
-target="${ccname%-*}"
-if [ "$ccname" = "$target" ]; then
-    target=
-fi
-
 printf '%s' "\
 int main(void){return 0;}
 " > tmp/test.c
@@ -140,16 +134,6 @@ if tmp/a.out > /dev/null 2>&1; then
 else
     printyes
     cross_compiling=1
-fi
-
-if [ -n "$target" ]; then
-    configlog "checking for $target-pkg-config"
-    if command -v "$target-pkg-config"; then
-        printyes
-        config "PKG_CONFIG := $target-pkg-config"
-    else
-        printno
-    fi
 fi
 
 printf '%s' "\
