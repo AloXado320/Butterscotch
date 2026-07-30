@@ -173,7 +173,7 @@ INCLUDES += $(INCLUDE)vendor/glad/include
 endif
 
 ifeq ($(OS),Windows)
-ifndef MSVC
+ifeq ($(SYNTAX),msvc)
 LIBS += -static
 LIBS += -lwinmm
 else
